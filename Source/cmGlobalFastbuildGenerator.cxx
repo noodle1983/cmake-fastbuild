@@ -1,0 +1,1014 @@
+/*============================================================================
+    CMake - Cross Platform Makefile Generator
+    Copyright 2000-2009 Kitware, Inc., Insight Software Consortium
+
+    Distributed under the OSI-approved BSD License (the "License");
+    see accompanying file Copyright.txt for details.
+
+    This software is distributed WITHOUT ANY WARRANTY; without even the
+    implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+    See the License for more information.
+============================================================================*/
+
+#include "cmGlobalFastbuildGenerator.h"
+
+#include "cmComputeLinkInformation.h"
+#include "cmCustomCommandGenerator.h"
+#include "cmDocumentationEntry.h"
+#include "cmFastbuildNormalTargetGenerator.h"
+#include "cmFastbuildUtilityTargetGenerator.h"
+#include "cmGeneratedFileStream.h"
+#include "cmGeneratorTarget.h"
+#include "cmGlobalGeneratorFactory.h"
+#include "cmLocalFastbuildGenerator.h"
+#include "cmLocalGenerator.h"
+#include "cmMakefile.h"
+#include "cmSourceFile.h"
+#include "cmState.h"
+#include "cmSystemTools.h"
+#include "cmTarget.h"
+#include "cmVersion.h"
+#include "cmake.h"
+
+const char* cmGlobalFastbuildGenerator::FASTBUILD_BUILD_FILE = "fbuild.bff";
+
+const char* cmGlobalFastbuildGenerator::INDENT = "  ";
+
+#define FASTBUILD_DOLLAR_TAG "FASTBUILD_DOLLAR_TAG"
+
+cmGlobalFastbuildGenerator::cmGlobalFastbuildGenerator(cmake* cm)
+  : cmGlobalCommonGenerator(cm)
+  , BuildFileStream(nullptr)
+{
+#ifdef _WIN32
+  cm->GetState()->SetWindowsShell(true);
+#endif
+  this->FindMakeProgramFile = "CMakeFastbuildFindMake.cmake";
+  cm->GetState()->SetFastbuildMake(true);
+}
+
+std::unique_ptr<cmGlobalGeneratorFactory>
+cmGlobalFastbuildGenerator::NewFactory()
+{
+  return std::unique_ptr<cmGlobalGeneratorFactory>(
+    new cmGlobalGeneratorSimpleFactory<cmGlobalFastbuildGenerator>());
+}
+
+bool cmGlobalFastbuildGenerator::FindMakeProgram(cmMakefile* mf)
+{
+  if (!cmGlobalGenerator::FindMakeProgram(mf)) {
+    return false;
+  }
+  if (const char* fastbuildCommand = mf->GetDefinition("CMAKE_MAKE_PROGRAM")) {
+    this->FastbuildCommand = fastbuildCommand;
+    std::vector<std::string> command;
+    command.push_back(this->FastbuildCommand);
+    command.emplace_back("-version");
+    std::string version;
+    std::string error;
+    if (!cmSystemTools::RunSingleCommand(command, &version, &error, nullptr,
+                                         nullptr,
+                                         cmSystemTools::OUTPUT_NONE)) {
+      mf->IssueMessage(MessageType::FATAL_ERROR,
+                       "Running\n '" + cmJoin(command, "' '") +
+                         "'\n"
+                         "failed with:\n " +
+                         error);
+      cmSystemTools::SetFatalErrorOccured();
+      return false;
+    }
+    cmsys::RegularExpression versionRegex(R"(^FASTBuild v([0-9]+\.[0-9]+))");
+    versionRegex.find(version);
+    this->FastbuildVersion = versionRegex.match(1);
+  }
+  return true;
+}
+
+std::unique_ptr<cmLocalGenerator>
+cmGlobalFastbuildGenerator::CreateLocalGenerator(cmMakefile* makefile)
+{
+  return std::unique_ptr<cmLocalGenerator>(
+    cm::make_unique<cmLocalFastbuildGenerator>(this, makefile));
+}
+
+std::vector<cmGlobalGenerator::GeneratedMakeCommand>
+cmGlobalFastbuildGenerator::GenerateBuildCommand(
+  const std::string& makeProgram, const std::string& projectName,
+  const std::string& projectDir, std::vector<std::string> const& targetNames,
+  const std::string& config, bool fast, int jobs, bool verbose,
+  std::vector<std::string> const& makeOptions)
+{
+  GeneratedMakeCommand makeCommand;
+  makeCommand.Add(this->SelectMakeProgram(makeProgram));
+  // A build command for fastbuild looks like this:
+  // fbuild.exe [make-options] [-config projectName.bff] <target>
+
+  // Hunt the fbuild.bff file in the directory above
+  std::string configFile;
+  if (!cmSystemTools::FileExists(projectDir + "fbuild.bff")) {
+    configFile = cmSystemTools::FileExistsInParentDirectories(
+      "fbuild.bff", projectDir.c_str(), "");
+  }
+
+  // Push in the make options
+  makeCommand.Add(makeOptions.begin(), makeOptions.end());
+
+  makeCommand.Add("-showcmds");
+  // makeCommand.Add("-quiet");
+  makeCommand.Add("-ide");
+  makeCommand.Add("-cache");
+
+  if (!configFile.empty()) {
+    makeCommand.Add("-config", configFile);
+  }
+
+  // Add the target-config to the command
+  for (const auto& tname : targetNames) {
+    if (!tname.empty()) {
+      if (tname == "clean") {
+        makeCommand.Add("-clean");
+      } else {
+        makeCommand.Add(tname);
+      }
+    }
+  }
+
+  return { std::move(makeCommand) };
+}
+
+void cmGlobalFastbuildGenerator::ComputeTargetObjectDirectory(
+  cmGeneratorTarget* gt) const
+{
+  // Compute full path to object file directory for this target.
+  std::string dir;
+  dir += gt->Makefile->GetCurrentBinaryDirectory();
+  dir += "/";
+  dir += gt->LocalGenerator->GetTargetDirectory(gt);
+  dir += "/";
+  gt->ObjectDirectory = dir;
+}
+
+void cmGlobalFastbuildGenerator::GetDocumentation(cmDocumentationEntry& entry)
+{
+  entry.Name = cmGlobalFastbuildGenerator::GetActualName();
+  entry.Brief = "Generates build.bff files.";
+}
+
+void cmGlobalFastbuildGenerator::Generate()
+{
+  // Check minimum Fastbuild version.
+  if (cmSystemTools::VersionCompare(cmSystemTools::OP_LESS,
+                                    this->FastbuildVersion.c_str(),
+                                    RequiredFastbuildVersion().c_str())) {
+    std::ostringstream msg;
+    msg << "The detected version of Fastbuild (" << this->FastbuildVersion;
+    msg << ") is less than the version of Fastbuild required by CMake (";
+    msg << this->RequiredFastbuildVersion() << ").";
+    this->GetCMakeInstance()->IssueMessage(MessageType::FATAL_ERROR,
+                                           msg.str());
+    return;
+  }
+
+  this->OpenBuildFileStream();
+
+  this->WriteBuildFileTop(*this->BuildFileStream);
+
+  // Execute the standard generate process
+  cmGlobalGenerator::Generate();
+
+  // Write compilers
+  this->WriteCompilers(*this->BuildFileStream);
+
+  this->WriteTargets(*this->BuildFileStream);
+
+  if (cmSystemTools::GetErrorOccuredFlag()) {
+    this->BuildFileStream->setstate(std::ios::failbit);
+  }
+
+  this->CloseBuildFileStream();
+}
+
+void cmGlobalFastbuildGenerator::WriteBuildFileTop(std::ostream& os)
+{
+  // Define some placeholder
+  WriteDivider(os);
+  os << "// Helper variables\n\n";
+
+  WriteVariable(os, "FB_INPUT_1_PLACEHOLDER", Quote("\"%1\""));
+  WriteVariable(os, "FB_INPUT_2_PLACEHOLDER", Quote("\"%2\""));
+  WriteVariable(os, "FB_INPUT_3_PLACEHOLDER", Quote("\"%3\""));
+
+  // Write settings
+  auto root = LocalGenerators[0].get();
+
+  std::string cacheDir =
+    GetCMakeInstance()->GetHomeOutputDirectory() + "/fbuild.cache";
+  if (root->GetMakefile()->IsDefinitionSet("CMAKE_FASTBUILD_CACHE_PATH"))
+    cacheDir =
+      root->GetMakefile()->GetSafeDefinition("CMAKE_FASTBUILD_CACHE_PATH");
+  cmSystemTools::ConvertToOutputSlashes(cacheDir);
+
+  WriteDivider(os);
+  os << "// Settings\n\n";
+
+  WriteCommand(os, "Settings");
+  os << "{\n";
+  WriteArray(*this->BuildFileStream, "Environment",
+             Wrap(cmSystemTools::GetEnvironmentVariables()), 1);
+  WriteVariable(*this->BuildFileStream, "CachePath", Quote(cacheDir), 1);
+  os << "}\n";
+}
+
+void cmGlobalFastbuildGenerator::WriteDivider(std::ostream& os)
+{
+  os << "// ======================================"
+        "=======================================\n";
+}
+
+void cmGlobalFastbuildGenerator::Indent(std::ostream& os, int count)
+{
+  for (int i = 0; i < count; ++i) {
+    os << cmGlobalFastbuildGenerator::INDENT;
+  }
+}
+
+void cmGlobalFastbuildGenerator::WriteComment(std::ostream& os,
+                                              const std::string& comment,
+                                              int indent)
+{
+  if (comment.empty()) {
+    return;
+  }
+
+  std::string::size_type lpos = 0;
+  std::string::size_type rpos;
+  os << "\n";
+  Indent(os, indent);
+  os << "/////////////////////////////////////////////\n";
+  while ((rpos = comment.find('\n', lpos)) != std::string::npos) {
+    Indent(os, indent);
+    os << "// " << comment.substr(lpos, rpos - lpos) << "\n";
+    lpos = rpos + 1;
+  }
+  Indent(os, indent);
+  os << "// " << comment.substr(lpos) << "\n\n";
+}
+
+void cmGlobalFastbuildGenerator::WriteVariable(std::ostream& os,
+                                               const std::string& key,
+                                               const std::string& value,
+                                               int indent)
+{
+  WriteVariable(os, key, value, "=", indent);
+}
+
+void cmGlobalFastbuildGenerator::WriteVariable(std::ostream& os,
+                                               const std::string& key,
+                                               const std::string& value,
+                                               const std::string& op,
+                                               int indent)
+{
+  cmGlobalFastbuildGenerator::Indent(os, indent);
+  os << "." << key << " " + op + " " << value << "\n";
+}
+
+void cmGlobalFastbuildGenerator::WriteCommand(std::ostream& os,
+                                              const std::string& command,
+                                              const std::string& value,
+                                              int indent)
+{
+  cmGlobalFastbuildGenerator::Indent(os, indent);
+  os << command;
+  if (!value.empty()) {
+    os << "(" << value << ")";
+  }
+  os << "\n";
+}
+
+void cmGlobalFastbuildGenerator::WriteArray(
+  std::ostream& os, const std::string& key,
+  const std::vector<std::string>& values, int indent)
+{
+  WriteArray(os, key, values, "=", indent);
+}
+
+void cmGlobalFastbuildGenerator::WriteArray(
+  std::ostream& os, const std::string& key,
+  const std::vector<std::string>& values, const std::string& op, int indent)
+{
+  WriteVariable(os, key, "", op, indent);
+  Indent(os, indent);
+  os << "{\n";
+  size_t size = values.size();
+  for (size_t index = 0; index < size; ++index) {
+    const std::string& value = values[index];
+    bool isLast = index == size - 1;
+
+    Indent(os, indent + 1);
+    os << value;
+    if (!isLast) {
+      os << ',';
+    }
+    os << "\n";
+  }
+  Indent(os, indent);
+  os << "}\n";
+}
+
+std::string cmGlobalFastbuildGenerator::Quote(const std::string& str,
+                                              const std::string& quotation)
+{
+  std::string result = str;
+  cmSystemTools::ReplaceString(result, quotation, "^" + quotation);
+  cmSystemTools::ReplaceString(result, FASTBUILD_DOLLAR_TAG, "$");
+  return quotation + result + quotation;
+}
+
+struct WrapHelper
+{
+  std::string m_prefix;
+  std::string m_suffix;
+
+  std::string operator()(const std::string& in)
+  {
+    std::string result = m_prefix + in + m_suffix;
+    cmSystemTools::ReplaceString(result, "$", "^$");
+    cmSystemTools::ReplaceString(result, FASTBUILD_DOLLAR_TAG, "$");
+    return result;
+  }
+};
+
+std::vector<std::string> cmGlobalFastbuildGenerator::Wrap(
+  const std::vector<std::string>& in, const std::string& prefix,
+  const std::string& suffix)
+{
+  std::vector<std::string> result;
+
+  WrapHelper helper = { prefix, suffix };
+
+  std::transform(in.begin(), in.end(), std::back_inserter(result), helper);
+
+  return result;
+}
+
+std::vector<std::string> cmGlobalFastbuildGenerator::Wrap(
+    const std::set<std::string>& in, const std::string& prefix,
+    const std::string& suffix)
+{
+    std::vector<std::string> result;
+
+    WrapHelper helper = { prefix, suffix };
+
+    std::transform(in.begin(), in.end(), std::back_inserter(result), helper);
+
+    return result;
+}
+
+void cmGlobalFastbuildGenerator::WriteDisclaimer(std::ostream& os)
+{
+  os << "// CMAKE generated file: DO NOT EDIT!\n"
+     << "// Generated by \"" << this->GetName() << "\""
+     << " Generator, CMake Version " << cmVersion::GetMajorVersion() << "."
+     << cmVersion::GetMinorVersion() << "\n\n";
+}
+
+void cmGlobalFastbuildGenerator::OpenBuildFileStream()
+{
+  // Compute Fastbuild's build file path.
+  std::string buildFilePath =
+    this->GetCMakeInstance()->GetHomeOutputDirectory();
+  buildFilePath += "/";
+  buildFilePath += cmGlobalFastbuildGenerator::FASTBUILD_BUILD_FILE;
+
+  // Get a stream where to generate things.
+  if (!this->BuildFileStream) {
+    this->BuildFileStream = new cmGeneratedFileStream(
+      buildFilePath.c_str(), false, this->GetMakefileEncoding());
+    if (!this->BuildFileStream) {
+      // An error message is generated by the constructor if it cannot
+      // open the file.
+      return;
+    }
+  }
+
+  // Write the do not edit header.
+  this->WriteDisclaimer(*this->BuildFileStream);
+
+  // Write a comment about this file.
+  *this->BuildFileStream
+    << "// This file contains all the build statements\n\n";
+}
+
+void cmGlobalFastbuildGenerator::CloseBuildFileStream()
+{
+  if (this->BuildFileStream) {
+    delete this->BuildFileStream;
+    this->BuildFileStream = nullptr;
+  } else {
+    cmSystemTools::Error("Build file stream was not open.");
+  }
+}
+
+void cmGlobalFastbuildGenerator::AddTarget(const FastbuildTarget& target)
+{
+  if (FastbuildTargets.find(target.Name) != FastbuildTargets.end()) {
+    cmSystemTools::Error("Duplicated target " + target.Name);
+  }
+  FastbuildTargets[target.Name] = target;
+}
+
+void cmGlobalFastbuildGenerator::WriteCompilers(std::ostream& os)
+{
+  for (const auto& [key, compilerDef] : Compilers) {
+    WriteDivider(os);
+    os << "// Compilers\n\n";
+
+    std::string fastbuildFamily = "custom";
+
+    if (compilerDef.language == "C" || compilerDef.language == "CXX" ||
+        compilerDef.language == "CUDA") {
+      std::map<std::string, std::string> compilerIdToFastbuildFamily = {
+        { "MSVC", "msvc" },        { "Clang", "clang" },
+        { "AppleClang", "clang" }, { "GNU", "gcc" },
+        { "NVIDIA", "cuda-nvcc" },
+      };
+      auto ft = compilerIdToFastbuildFamily.find(compilerDef.cmakeCompilerID);
+      if (ft != compilerIdToFastbuildFamily.end())
+        fastbuildFamily = ft->second;
+    }
+
+    // Strip out the path to the compiler
+    std::string compilerPath = compilerDef.path;
+    cmSystemTools::ConvertToOutputSlashes(compilerPath);
+
+    // Write out the compiler that has been configured
+    WriteCommand(os, "Compiler", Quote(compilerDef.name));
+    os << "{\n";
+    WriteVariable(os, "Executable", Quote(compilerPath), 1);
+    WriteVariable(os, "CompilerFamily", Quote(fastbuildFamily), 1);
+    if (compilerDef.useLightCache) {
+      WriteVariable(os, "UseLightCache_Experimental", "true", 1);
+    }
+    if (fastbuildFamily == "clang")
+      WriteVariable(os, "ClangRewriteIncludes", "false", 1);
+    os << "}\n";
+
+    auto compilerId = compilerDef.name;
+    cmSystemTools::ReplaceString(compilerId, "-", "_");
+    WriteVariable(os, compilerId, Quote(compilerDef.name));
+  }
+  // We need this because the Library command needs a compiler
+  // even if don't compile anything
+  if (!this->Compilers.empty())
+    WriteVariable(os, "Compiler_dummy",
+                  Quote(this->Compilers.begin()->second.name));
+}
+
+void cmGlobalFastbuildGenerator::AddCompiler(const std::string& language,
+                                             cmMakefile* mf)
+{
+  if (this->Compilers.find(language) != this->Compilers.end())
+    return;
+
+  // Calculate the root location of the compiler
+  std::string variableString = "CMAKE_" + language + "_COMPILER";
+  std::string compilerLocation = mf->GetSafeDefinition(variableString);
+  if (compilerLocation.empty())
+    return;
+
+  // Add the language to the compiler's name
+  FastbuildCompiler compilerDef;
+  compilerDef.name = "Compiler";
+  compilerDef.path = compilerLocation;
+  compilerDef.cmakeCompilerID =
+    mf->GetSafeDefinition("CMAKE_" + language + "_COMPILER_ID");
+
+  compilerDef.cmakeCompilerVersion =
+    mf->GetSafeDefinition("CMAKE_" + language + "_COMPILER_VERSION");
+  compilerDef.name += "-";
+  compilerDef.name += language;
+  compilerDef.language = language;
+
+  if (compilerDef.cmakeCompilerID == "MSVC" &&
+      cmIsOn(mf->GetSafeDefinition("CMAKE_FASTBUILD_USE_LIGHTCACHE")) &&
+      (language == "C" || language == "CXX")) {
+    compilerDef.useLightCache = true;
+  }
+
+  this->Compilers[language] = compilerDef;
+}
+
+std::string cmGlobalFastbuildGenerator::AddLauncher(
+  const std::string& launcher, const std::string& language, cmMakefile* mf)
+{
+  // Add the language to the compiler's name
+  FastbuildCompiler compilerDef;
+  compilerDef.name = "Launcher";
+  compilerDef.path = launcher;
+  compilerDef.cmakeCompilerID =
+    mf->GetSafeDefinition("CMAKE_" + language + "_COMPILER_ID");
+  compilerDef.cmakeCompilerVersion =
+    mf->GetSafeDefinition("CMAKE_" + language + "_COMPILER_VERSION");
+  compilerDef.name += "-";
+  compilerDef.name += language;
+  auto hash =
+    cmCryptoHash(cmCryptoHash::AlgoSHA256).HashString(launcher).substr(0, 7);
+  compilerDef.name += "-" + hash;
+  compilerDef.language = language;
+
+  if (compilerDef.cmakeCompilerID == "MSVC" &&
+      cmIsOn(mf->GetSafeDefinition("CMAKE_FASTBUILD_USE_LIGHTCACHE")) &&
+      (language == "C" || language == "CXX")) {
+    compilerDef.useLightCache = true;
+  }
+
+  this->Compilers[language + "-" + hash] = compilerDef;
+
+  auto compilerId = compilerDef.name;
+  cmSystemTools::ReplaceString(compilerId, "-", "_");
+
+  return compilerId;
+}
+
+std::string cmGlobalFastbuildGenerator::ConvertToFastbuildPath(
+  const std::string& path) const
+{
+  auto root = LocalGenerators[0].get();
+  return root->MaybeConvertToRelativePath(
+    ((cmLocalCommonGenerator*)root)->GetWorkingDirectory(), path);
+}
+
+std::set<std::string> cmGlobalFastbuildGenerator::WriteExecs(
+  const std::vector<FastbuildExecNode>& Execs,
+  const std::set<std::string>& dependencies)
+{
+  std::set<std::string> output;
+
+  for (const auto& Exec : Execs) {
+    output.insert(Exec.Name);
+
+    auto preBuildDependencies = Exec.PreBuildDependencies;
+    preBuildDependencies.insert(dependencies.begin(), dependencies.end());
+
+    if (Exec.IsNoop) {
+      WriteAlias(Exec.Name, preBuildDependencies);
+    } else {
+      WriteCommand(*BuildFileStream, "Exec", Quote(Exec.Name), 1);
+      Indent(*BuildFileStream, 1);
+      *BuildFileStream << "{\n";
+      {
+        if (!preBuildDependencies.empty())
+          WriteArray(*BuildFileStream, "PreBuildDependencies",
+                     Wrap(preBuildDependencies), 2);
+        WriteVariable(*BuildFileStream, "ExecExecutable",
+                      Quote(Exec.ExecExecutable), 2);
+        if (!Exec.ExecArguments.empty()) {
+          WriteVariable(*BuildFileStream, "ExecArguments",
+                        Quote(Exec.ExecArguments), 2);
+        }
+        if (!Exec.ExecWorkingDir.empty()) {
+          WriteVariable(*BuildFileStream, "ExecWorkingDir",
+                        Quote(Exec.ExecWorkingDir), 2);
+        }
+        if (!Exec.ExecInput.empty()) {
+          WriteArray(*BuildFileStream, "ExecInput", Wrap(Exec.ExecInput), 2);
+        }
+        if (Exec.ExecUseStdOutAsOutput) {
+          WriteVariable(*BuildFileStream, "ExecUseStdOutAsOutput", "true", 2);
+        }
+        WriteVariable(*BuildFileStream, "ExecAlwaysShowOutput", "true", 2);
+        WriteVariable(*BuildFileStream, "ExecOutput", Quote(Exec.ExecOutput),
+                      2);
+        if (Exec.ExecAlways)
+          WriteVariable(*BuildFileStream, "ExecAlways", "true", 2);
+      }
+      Indent(*BuildFileStream, 1);
+      *BuildFileStream << "}\n";
+    }
+  }
+
+  // Forward dependencies to the next step
+  if (output.empty())
+    return dependencies;
+
+  return output;
+}
+
+std::set<std::string> cmGlobalFastbuildGenerator::WriteObjectLists(
+  const std::vector<FastbuildObjectListNode>& ObjectLists,
+  const std::set<std::string>& dependencies)
+{
+  std::set<std::string> output;
+
+  for (const auto& ObjectList : ObjectLists) {
+    output.insert(ObjectList.Name);
+
+    WriteCommand(*BuildFileStream, "ObjectList", Quote(ObjectList.Name), 1);
+    Indent(*BuildFileStream, 1);
+    *BuildFileStream << "{\n";
+    {
+      std::set<std::string> objectListDependencies = dependencies;
+      for (const auto& dependency : ObjectList.PreBuildDependencies)
+        objectListDependencies.insert(dependency);
+      if (!objectListDependencies.empty())
+        WriteArray(*BuildFileStream, "PreBuildDependencies",
+                   Wrap(objectListDependencies), 2);
+      WriteVariable(*BuildFileStream, "Compiler", ObjectList.Compiler, 2);
+      WriteVariable(*BuildFileStream, "CompilerOptions",
+                    Quote(ObjectList.CompilerOptions), 2);
+      WriteVariable(*BuildFileStream, "CompilerOutputPath",
+                    Quote(ObjectList.CompilerOutputPath), 2);
+      WriteVariable(*BuildFileStream, "CompilerOutputExtension",
+                    Quote(ObjectList.CompilerOutputExtension), 2);
+      WriteVariable(*BuildFileStream, "CompilerOutputKeepBaseExtension",
+                    "true", 2);
+      WriteArray(*BuildFileStream, "CompilerInputFiles",
+                 Wrap(ObjectList.CompilerInputFiles), 2);
+      WriteVariable(*BuildFileStream, "UnityInputFiles", ".CompilerInputFiles",
+                    2);
+      if (!ObjectList.PCHInputFile.empty()) {
+        WriteVariable(*BuildFileStream, "PCHInputFile",
+                      Quote(ObjectList.PCHInputFile), 2);
+        WriteVariable(*BuildFileStream, "PCHOutputFile",
+                      Quote(ObjectList.PCHOutputFile), 2);
+        WriteVariable(*BuildFileStream, "PCHOptions",
+                      Quote(ObjectList.PCHOptions), 2);
+      }
+    }
+    Indent(*BuildFileStream, 1);
+    *BuildFileStream << "}\n";
+  }
+
+  return output;
+}
+
+std::set<std::string> cmGlobalFastbuildGenerator::WriteLinker(
+  const std::vector<FastbuildLinkerNode>& LinkerNodes,
+  const std::set<std::string>& dependencies)
+{
+  std::set<std::string> output;
+
+  for (const auto& LinkerNode : LinkerNodes) {
+    output.insert(LinkerNode.Name);
+
+    std::set<std::string> PreBuildDependencies = dependencies;
+    for (const auto& library : LinkerNode.Libraries) {
+        PreBuildDependencies.erase(library);
+    }
+
+    if (LinkerNode.Type == FastbuildLinkerNode::EXECUTABLE ||
+        LinkerNode.Type == FastbuildLinkerNode::SHARED_LIBRARY) {
+      auto alias = LinkerNode.Name == LinkerNode.LinkerOutput
+        ? ""
+        : Quote(LinkerNode.Name);
+      WriteCommand(*BuildFileStream,
+                   LinkerNode.Type == FastbuildLinkerNode::EXECUTABLE
+                     ? "Executable"
+                     : "DLL",
+                   alias, 1);
+      Indent(*BuildFileStream, 1);
+      *BuildFileStream << "{\n";
+      {
+        if (!PreBuildDependencies.empty())
+          WriteArray(*BuildFileStream, "PreBuildDependencies",
+                     Wrap(PreBuildDependencies), 2);
+        WriteVariable(*BuildFileStream, "Linker", Quote(LinkerNode.Linker), 2);
+        WriteVariable(*BuildFileStream, "LinkerOptions",
+                      Quote(LinkerNode.LinkerOptions), 2);
+        WriteVariable(*BuildFileStream, "LinkerOutput",
+                      Quote(LinkerNode.LinkerOutput), 2);
+        WriteArray(*BuildFileStream, "Libraries", Wrap(LinkerNode.Libraries),
+                   2);
+        WriteVariable(*BuildFileStream, "LinkerLinkObjects", "false", 2);
+        WriteVariable(*BuildFileStream, "LinkerType",
+                      Quote(LinkerNode.LinkerType), 2);
+      }
+      Indent(*BuildFileStream, 1);
+      *BuildFileStream << "}\n";
+    } else {
+      WriteCommand(*BuildFileStream, "Library", Quote(LinkerNode.Name), 1);
+      Indent(*BuildFileStream, 1);
+      *BuildFileStream << "{\n";
+      {
+        if (!PreBuildDependencies.empty())
+          WriteArray(*BuildFileStream, "PreBuildDependencies",
+                     Wrap(PreBuildDependencies), 2);
+        WriteVariable(*BuildFileStream, "Librarian", Quote(LinkerNode.Linker),
+                      2);
+        WriteVariable(*BuildFileStream, "LibrarianOptions",
+                      Quote(LinkerNode.LinkerOptions), 2);
+        WriteArray(*BuildFileStream, "LibrarianAdditionalInputs",
+                   Wrap(LinkerNode.Libraries), 2);
+        WriteVariable(*BuildFileStream, "LibrarianOutput",
+                      Quote(LinkerNode.LinkerOutput), 2);
+        WriteVariable(*BuildFileStream, "LibrarianType",
+                      Quote(LinkerNode.LinkerType), 2);
+        WriteVariable(*BuildFileStream, "Compiler", LinkerNode.Compiler, 2);
+        WriteVariable(*BuildFileStream, "CompilerOptions",
+                      "'-c $FB_INPUT_1_PLACEHOLDER$ $FB_INPUT_2_PLACEHOLDER$'",
+                      2);
+        WriteVariable(*BuildFileStream, "CompilerOutputPath", "'/dummy/'", 2);
+      }
+      Indent(*BuildFileStream, 1);
+      *BuildFileStream << "}\n";
+    }
+  }
+
+  return output;
+}
+
+void cmGlobalFastbuildGenerator::WriteAlias(
+    const std::string& alias, const std::vector<std::string>& targets)
+{
+    if (targets.empty())
+        return;
+    WriteCommand(*BuildFileStream, "Alias", Quote(alias), 1);
+    Indent(*BuildFileStream, 1);
+    *BuildFileStream << "{\n";
+    WriteArray(*BuildFileStream, "Targets", Wrap(targets), 2);
+    Indent(*BuildFileStream, 1);
+    *BuildFileStream << "}\n";
+}
+
+void cmGlobalFastbuildGenerator::WriteAlias(
+  const std::string& alias, const std::set<std::string>& targets)
+{
+  if (targets.empty())
+    return;
+  WriteCommand(*BuildFileStream, "Alias", Quote(alias), 1);
+  Indent(*BuildFileStream, 1);
+  *BuildFileStream << "{\n";
+  WriteArray(*BuildFileStream, "Targets", Wrap(targets), 2);
+  Indent(*BuildFileStream, 1);
+  *BuildFileStream << "}\n";
+}
+
+void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
+{
+  {
+    FastbuildTarget allTarget;
+    FastbuildAliasNode allNode;
+    for (const auto& it : FastbuildTargets) {
+      const auto& Target = it.second;
+      if (!Target.IsGlobal && !Target.IsExcluded) {
+        allNode.Targets.insert(Target.Name + "-products");
+        allTarget.Dependencies.push_back(Target.Name);
+      }
+    }
+
+    FastbuildExecNode noopNode;
+    noopNode.Name = "noop";
+#ifdef _WIN32
+    noopNode.ExecExecutable = cmSystemTools::FindProgram("cmd.exe");
+    noopNode.ExecArguments = "/C cd .";
+#else
+    noopNode.ExecExecutable = cmSystemTools::FindProgram("bash");
+    noopNode.ExecArguments = "-c :";
+#endif
+    noopNode.ExecUseStdOutAsOutput = true;
+    noopNode.ExecOutput = "noop.txt";
+
+    FastbuildTarget noop;
+    noop.Name = noopNode.Name;
+    noop.ExecNodes.push_back(noopNode);
+
+    FastbuildTargets[noop.Name] = noop;
+
+    if (allNode.Targets.empty()) {
+      allNode.Targets.insert(noop.Name + "-products");
+      allTarget.Dependencies.push_back(noop.Name);
+    }
+
+    allTarget.Name = allNode.Name = "all";
+    allTarget.AliasNodes.push_back(allNode);
+    allTarget.IsGlobal = true;
+    FastbuildTargets[allTarget.Name] = allTarget;
+  }
+
+  {
+    std::vector<std::string> implicitDeps;
+    for (auto& lg : LocalGenerators) {
+      std::vector<std::string> const& lf = lg->GetMakefile()->GetListFiles();
+      for (const auto& dep : lf) {
+        implicitDeps.push_back(dep);
+      }
+    }
+
+    auto root = LocalGenerators[0].get();
+
+    std::string outDir =
+      std::string(root->GetMakefile()->GetHomeOutputDirectory()) +
+#ifdef _WIN32
+      '\\'
+#else
+      '/'
+#endif
+      ;
+
+    implicitDeps.push_back(outDir + "CMakeCache.txt");
+
+    std::sort(implicitDeps.begin(), implicitDeps.end());
+    implicitDeps.erase(std::unique(implicitDeps.begin(), implicitDeps.end()),
+                       implicitDeps.end());
+
+    FastbuildTarget rebuildBFFTarget;
+    rebuildBFFTarget.Name = "rebuild-bff";
+
+    FastbuildExecNode rebuildBFF;
+    rebuildBFF.Name = "rebuild-bff";
+
+    std::ostringstream args;
+    args << root->ConvertToOutputFormat(cmSystemTools::GetCMakeCommand(),
+                                        cmOutputConverter::SHELL)
+         << " -H"
+         << root->ConvertToOutputFormat(root->GetSourceDirectory(),
+                                        cmOutputConverter::SHELL)
+         << " -B"
+         << root->ConvertToOutputFormat(root->GetBinaryDirectory(),
+                                        cmOutputConverter::SHELL);
+    rebuildBFF.ExecArguments = args.str();
+    rebuildBFF.ExecInput = implicitDeps;
+    rebuildBFF.ExecExecutable = cmSystemTools::GetCMakeCommand();
+    rebuildBFF.ExecOutput =
+      ConvertToFastbuildPath(outDir + FASTBUILD_BUILD_FILE);
+    rebuildBFFTarget.ExecNodes.push_back(rebuildBFF);
+
+    FastbuildTargets[rebuildBFF.Name] = rebuildBFFTarget;
+  }
+
+  std::map<std::string, std::string> objectOutputs;
+  for (const auto& [Name, Target] : FastbuildTargets) {
+    for (const auto& node : Target.ObjectListNodes) {
+      for (const auto& output : node.ObjectOutputs) {
+        objectOutputs[output] = Target.Name;
+      }
+    }
+  }
+
+  // Add Object dependecies as target dependencies
+  for (auto& [_, Target] : FastbuildTargets) {
+    for (auto& node : Target.ObjectListNodes) {
+      for (auto dependency = node.ObjectDependencies.begin();
+           dependency != node.ObjectDependencies.end();) {
+        if (auto dt = objectOutputs.find(*dependency);
+            dt != objectOutputs.end()) {
+          Target.Dependencies.push_back(dt->second);
+          dependency = node.ObjectDependencies.erase(dependency);
+        } else {
+          ++dependency;
+        }
+      }
+
+      if (!node.ObjectDependencies.empty()) {
+        for (const auto& inputFile : node.CompilerInputFiles) {
+          FastbuildExecNode execNode;
+          execNode.Name = "object-dependencies-";
+          cmCryptoHash hash(cmCryptoHash::AlgoSHA256);
+          execNode.Name += hash.HashString(inputFile + node.Name).substr(0, 7);
+          execNode.ExecExecutable = cmSystemTools::GetCMakeCommand();
+          execNode.ExecArguments = "-E touch " + inputFile;
+          execNode.ExecInput = node.ObjectDependencies;
+          execNode.ExecOutput = "dummy-" + execNode.Name + ".txt";
+          execNode.ExecUseStdOutAsOutput = true;
+          Target.ExecNodes.push_back(execNode);
+        }
+      }
+    }
+  }
+
+  // Sort targets by dependencies, Fastbuild doesn't like it any other way
+  std::vector<std::string> orderedTargets;
+  {
+    std::vector<std::string> targets;
+    std::unordered_multimap<std::string, std::string> forwardDependencies,
+      reverseDependencies;
+    for (const auto& it : FastbuildTargets) {
+      const auto& Target = it.second;
+
+      targets.push_back(Target.Name);
+      for (const auto& Dependency : Target.Dependencies) {
+        forwardDependencies.emplace(Target.Name, Dependency);
+        reverseDependencies.emplace(Dependency, Target.Name);
+      }
+    }
+
+    while (!targets.empty()) {
+      size_t initialSize = targets.size();
+      for (auto it = targets.begin(); it != targets.end();) {
+        auto targetName = *it;
+        if (forwardDependencies.find(targetName) ==
+            forwardDependencies.end()) {
+          orderedTargets.emplace_back(targetName);
+          it = targets.erase(it);
+
+          auto range = reverseDependencies.equal_range(targetName);
+          for (auto rt = range.first; rt != range.second; ++rt) {
+            // Fetch the list of deps on that target
+            auto frange = forwardDependencies.equal_range(rt->second);
+            for (auto ft = frange.first; ft != frange.second;) {
+              if (ft->second == targetName) {
+                ft = forwardDependencies.erase(ft);
+              } else {
+                ++ft;
+              }
+            }
+          }
+        } else {
+          ++it;
+        }
+      }
+      if (initialSize == targets.size()) {
+        for (const auto& target : targets) {
+          orderedTargets.push_back(target);
+        }
+        targets.clear();
+      }
+    }
+  }
+
+  std::set<std::string> allCustomCommands;
+  for (const auto& targetName : orderedTargets) {
+    auto& Target = FastbuildTargets[targetName];
+
+    for (auto it = Target.ExecNodes.begin(); it != Target.ExecNodes.end();) {
+      if (allCustomCommands.insert(it->Name).second) {
+        ++it;
+      } else {
+        it = Target.ExecNodes.erase(it);
+      }
+    }
+
+    this->WriteComment(*this->GetBuildFileStream(),
+                       "Target definition: " + targetName);
+    *this->GetBuildFileStream() << "{\n";
+
+    for (const auto& [key, value] : Target.Variables) {
+      WriteVariable(*this->BuildFileStream, key,
+                    cmGlobalFastbuildGenerator::Quote(value), 1);
+    }
+
+    std::set<std::string> targetNodes;
+    std::set<std::string> dependencies;
+    // We want to depend on the products, this way we make sure we are waiting
+    // for all generations
+    for (const auto& dep : Target.Dependencies) {
+      if (!FastbuildTargets.at(dep).IsGlobal)
+        dependencies.insert(dep + "-products");
+      else
+        dependencies.insert(dep);
+    }
+    dependencies = this->WriteExecs(Target.PreBuildExecNodes, dependencies);
+    targetNodes.insert(dependencies.begin(), dependencies.end());
+    dependencies = this->WriteExecs(Target.ExecNodes, dependencies);
+    targetNodes.insert(dependencies.begin(), dependencies.end());
+    auto objectLists =
+      this->WriteObjectLists(Target.ObjectListNodes, dependencies);
+    targetNodes.insert(objectLists.begin(), objectLists.end());
+    dependencies = this->WriteExecs(Target.PreLinkExecNodes, objectLists.empty() ? dependencies : objectLists);
+    targetNodes.insert(dependencies.begin(), dependencies.end());
+    auto linked = this->WriteLinker(Target.LinkerNodes, dependencies);
+    targetNodes.insert(linked.begin(), linked.end());
+    auto products = this->WriteExecs(Target.PostBuildExecNodes, linked.empty() ? dependencies  : linked);
+    targetNodes.insert(products.begin(), products.end());
+
+    for (const auto& it : Target.AliasNodes) {
+      this->WriteAlias(it.Name, it.Targets);
+      targetNodes.insert(it.Name);
+    }
+
+    if (!Target.IsGlobal) {
+      if (targetNodes.find(Target.Name) == targetNodes.end()) {
+        this->WriteAlias(Target.Name, products);
+        products = { Target.Name };
+      }
+      for (const auto& object : objectLists)
+          products.erase(object);
+      for (const auto& link : linked)
+          products.erase(link);
+      this->WriteAlias(Target.Name + "-products", products);
+    } else if (Target.AliasNodes.empty()) {
+      if (std::find(products.begin(), products.end(), Target.Name) ==
+          products.end()) {
+        this->WriteAlias(Target.Name, products);
+      }
+    }
+
+    *this->GetBuildFileStream() << "}\n";
+  }
+}
+
+std::string cmGlobalFastbuildGenerator::GetTargetName(
+  const cmGeneratorTarget* GeneratorTarget) const
+{
+  std::string targetName =
+    GeneratorTarget->GetLocalGenerator()->GetCurrentBinaryDirectory();
+  targetName += "/";
+  targetName += GeneratorTarget->GetName();
+  targetName = this->ConvertToFastbuildPath(targetName);
+  return targetName;
+}
+
+bool cmGlobalFastbuildGenerator::IsExcluded(cmGeneratorTarget* target)
+{
+  return cmGlobalGenerator::IsExcluded(LocalGenerators[0].get(), target);
+}

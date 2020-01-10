@@ -78,6 +78,7 @@
 #    include <cmext/memory>
 
 #    include "cmGlobalBorlandMakefileGenerator.h"
+#    include "cmGlobalFastbuildGenerator.h"
 #    include "cmGlobalJOMMakefileGenerator.h"
 #    include "cmGlobalNMakeMakefileGenerator.h"
 #    include "cmGlobalVisualStudio10Generator.h"
@@ -102,6 +103,7 @@
 #  include "cmGlobalNinjaGenerator.h"
 #endif
 #include "cmExtraCodeLiteGenerator.h"
+#include "cmGlobalFastbuildGenerator.h"
 
 #if !defined(CMAKE_BOOT_MINGW)
 #  include "cmExtraCodeBlocksGenerator.h"
@@ -2029,6 +2031,7 @@ void cmake::AddDefaultGenerators()
 #  endif
   this->Generators.push_back(cmGlobalNinjaGenerator::NewFactory());
   this->Generators.push_back(cmGlobalNinjaMultiGenerator::NewFactory());
+  this->Generators.push_back(cmGlobalFastbuildGenerator::NewFactory());
 #endif
 #if defined(CMAKE_USE_WMAKE)
   this->Generators.push_back(cmGlobalWatcomWMakeGenerator::NewFactory());

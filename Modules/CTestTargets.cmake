@@ -65,7 +65,7 @@ if(NOT _CTEST_TARGETS_ADDED)
   endforeach()
 
   # For Makefile generators add more granular targets.
-  if("${CMAKE_GENERATOR}" MATCHES "(Ninja|Make)")
+  if("${CMAKE_GENERATOR}" MATCHES "(Ninja|Make|Fastbuild)")
     # Make targets for Experimental builds
     foreach(mode Nightly Experimental Continuous)
       foreach(testtype
