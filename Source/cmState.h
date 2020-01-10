@@ -206,6 +206,8 @@ public:
   bool UseMSYSShell() const;
   void SetNinjaMulti(bool ninjaMulti);
   bool UseNinjaMulti() const;
+  void SetFastbuildMake(bool fastbuildMake);
+  bool UseFastbuildMake() const;
 
   unsigned int GetCacheMajorVersion() const;
   unsigned int GetCacheMinorVersion() const;
@@ -275,6 +277,7 @@ private:
   bool NMake = false;
   bool MSYSShell = false;
   bool NinjaMulti = false;
+  bool FastbuildMake = false;
   Mode StateMode = Unknown;
   ProjectKind StateProjectKind = ProjectKind::Normal;
 };

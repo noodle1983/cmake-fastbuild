@@ -747,11 +747,11 @@ if(BUILD_TESTING)
   ADD_LINK_FLAGS_TEST(mod_flags_config dll_flags_config)
   ADD_LINK_FLAGS_TEST(exe_flags_config mod_flags_config)
 
-  # If we are running right now with a Unix Makefiles or Ninja based generator,
+  # If we are running right now with a Unix Makefiles, Fastbuild or Ninja based generator,
   # build the "Simple" test with the ExtraGenerators, if available
   # This doesn't test whether the generated project files work (unfortunately),
   # mainly it tests that cmake doesn't crash when generating these project files.
-  if(CMAKE_GENERATOR MATCHES "^(Unix Makefiles|Ninja)$"
+  if(CMAKE_GENERATOR MATCHES "^(Unix Makefiles|Ninja|Fastbuild)$"
       AND NOT "${CMAKE_CURRENT_BINARY_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
     foreach(extraGenerator
         "CodeBlocks"
@@ -777,7 +777,7 @@ if(BUILD_TESTING)
 
   # test for correct sub-project generation
   # not implemented in Xcode or Ninja
-  if(NOT CMAKE_GENERATOR MATCHES "Xcode|Ninja")
+  if(NOT CMAKE_GENERATOR MATCHES "Xcode|Ninja|Fastbuild")
     # run cmake and configure all of SubProject
     # but only build the independent executable car
     add_test(SubProject ${CMAKE_CTEST_COMMAND}
@@ -3351,7 +3351,7 @@ if(BUILD_TESTING)
         )
     endif()
 
-    if("${CMAKE_GENERATOR}" MATCHES "Makefiles" OR "${CMAKE_GENERATOR}" MATCHES "Ninja")
+    if("${CMAKE_GENERATOR}" MATCHES "Makefiles|Ninja|Fastbuild")
       configure_file("${CMake_SOURCE_DIR}/Tests/CTestTestLaunchers/test.cmake.in"
         "${CMake_BINARY_DIR}/Tests/CTestTestLaunchers/test.cmake" @ONLY ESCAPE_QUOTES)
       add_test(CTestTestLaunchers ${CMAKE_CTEST_COMMAND}
@@ -3662,7 +3662,7 @@ if(BUILD_TESTING)
     --test-command IncludeDirectories)
   list(APPEND TEST_BUILD_DIRS "${CMake_BINARY_DIR}/Tests/IncludeDirectories")
 
-  if(CMAKE_GENERATOR MATCHES "^((Unix|MSYS) Makefiles|Ninja)$" AND
+  if(CMAKE_GENERATOR MATCHES "^((Unix|MSYS) Makefiles|Ninja|Fastbuild)$" AND
      ((CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 4.4)
       OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND NOT "x${CMAKE_CXX_SIMULATE_ID}" STREQUAL "xMSVC")
       OR (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")))

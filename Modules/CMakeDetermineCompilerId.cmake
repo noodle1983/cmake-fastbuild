@@ -189,7 +189,7 @@ function(CMAKE_DETERMINE_COMPILER_ID lang flagvar src)
     set(CMAKE_EXECUTABLE_FORMAT "Unknown" CACHE INTERNAL "Executable file format")
   endif()
 
-  if((CMAKE_GENERATOR MATCHES "^Ninja"
+  if((CMAKE_GENERATOR MATCHES "^Ninja|Fastbuild"
         OR ((NOT DEFINED CMAKE_DEPENDS_USE_COMPILER OR CMAKE_DEPENDS_USE_COMPILER)
           AND CMAKE_GENERATOR MATCHES "Makefiles|WMake"))
       AND MSVC_${lang}_ARCHITECTURE_ID)

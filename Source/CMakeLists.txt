@@ -849,6 +849,19 @@ set(SRCS ${SRCS}
 # Temporary variable for tools targets
 set(_tools)
 
+# Fastbuild support
+set(SRCS ${SRCS}
+  cmGlobalFastbuildGenerator.h
+  cmGlobalFastbuildGenerator.cxx
+  cmLocalFastbuildGenerator.cxx
+  cmLocalFastbuildGenerator.h
+  cmFastbuildTargetGenerator.cxx
+  cmFastbuildTargetGenerator.h
+  cmFastbuildNormalTargetGenerator.cxx
+  cmFastbuildNormalTargetGenerator.h
+  cmFastbuildUtilityTargetGenerator.cxx
+  cmFastbuildUtilityTargetGenerator.h
+  )
 if(WIN32 AND NOT CYGWIN)
   set_source_files_properties(cmcldeps.cxx PROPERTIES COMPILE_DEFINITIONS _WIN32_WINNT=0x0501)
   add_executable(cmcldeps cmcldeps.cxx ${MANIFEST_FILE})

@@ -37,7 +37,7 @@ if(NOT DEFINED CTEST_USE_LAUNCHERS AND DEFINED ENV{CTEST_USE_LAUNCHERS_DEFAULT})
     CACHE INTERNAL "CTEST_USE_LAUNCHERS initial value from ENV")
 endif()
 
-if(NOT "${CMAKE_GENERATOR}" MATCHES "Make|Ninja")
+if(NOT "${CMAKE_GENERATOR}" MATCHES "Make|Ninja|Fastbuild")
   set(CTEST_USE_LAUNCHERS 0)
 endif()
 
@@ -54,7 +54,7 @@ if(CTEST_USE_LAUNCHERS)
   set(__launch_custom_options
     "${__launch_common_options} --output <OUTPUT>")
 
-  if("${CMAKE_GENERATOR}" MATCHES "Ninja")
+  if("${CMAKE_GENERATOR}" MATCHES "Ninja|Fastbuild")
     string(APPEND __launch_compile_options " --filter-prefix <CMAKE_CL_SHOWINCLUDES_PREFIX>")
   endif()
 

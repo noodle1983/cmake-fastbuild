@@ -10,6 +10,7 @@ if (((CMAKE_C_COMPILER_ID STREQUAL GNU AND CMAKE_C_COMPILER_VERSION VERSION_GREA
        NOT CMAKE_GENERATOR MATCHES "Visual Studio")) # No support for VS generators yet.
     AND (CMAKE_GENERATOR STREQUAL "Unix Makefiles"
       OR CMAKE_GENERATOR STREQUAL "Ninja"
+      OR CMAKE_GENERATOR STREQUAL "Fastbuild"
       OR (CMAKE_GENERATOR STREQUAL "Xcode" AND NOT XCODE_VERSION VERSION_LESS 6.0)))
   if ("x${CMAKE_C_COMPILER_ID}" STREQUAL "xMSVC")
     set(run_sys_includes_test 1)
@@ -141,6 +142,6 @@ if (NOT incs STREQUAL ";/one/two")
   message(SEND_ERROR "Empty include_directories entry was not ignored.")
 endif()
 
-if(NOT CMAKE_GENERATOR STREQUAL "Xcode" AND NOT CMAKE_GENERATOR MATCHES "Ninja")
+if(NOT CMAKE_GENERATOR STREQUAL "Xcode" AND NOT CMAKE_GENERATOR MATCHES "Ninja" AND NOT CMAKE_GENERATOR STREQUAL "Fastbuild")
   add_subdirectory(CMP0021)
 endif()

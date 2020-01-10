@@ -3268,6 +3268,12 @@ void cmLocalGenerator::JoinDefines(const std::set<std::string>& defines,
         }
         def += c;
       }
+    } else if (this->GetState()->UseFastbuildMake() &&
+               !this->Makefile->IsSet("MSVC")) {
+      // TODO needs more consideration
+      // on windows , fastbuild need to escape double quta (used by cmd?)
+      // on linux , fastbuild do not need to escape double quta (not use sh?)
+      def += define;
     } else {
       // Make the definition appear properly on the command line.  Use
       // -DNAME="value" instead of -D"NAME=value" for historical reasons.
