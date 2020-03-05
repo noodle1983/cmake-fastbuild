@@ -212,6 +212,7 @@ public:
     std::string cmakeCompilerID;
     std::string cmakeCompilerVersion;
     std::string language;
+    std::vector<std::string> extraFiles;
     bool useLightCache = false;
   };
 
