@@ -451,6 +451,8 @@ void cmGlobalFastbuildGenerator::WriteCompilers(std::ostream& os)
     }
     if (fastbuildFamily == "clang")
       WriteVariable(os, "ClangRewriteIncludes", "false", 1);
+    if (!compilerDef.extraFiles.empty())
+        WriteArray(os, "ExtraFiles", Wrap(compilerDef.extraFiles), 1);
     os << "}\n";
 
     auto compilerId = compilerDef.name;
@@ -494,6 +496,7 @@ void cmGlobalFastbuildGenerator::AddCompiler(const std::string& language,
       (language == "C" || language == "CXX")) {
     compilerDef.useLightCache = true;
   }
+  compilerDef.extraFiles = cmExpandedList(mf->GetSafeDefinition("CMAKE_" + language + "_FASTBUILD_EXTRA_FILES"));
 
   this->Compilers[language] = compilerDef;
 }
