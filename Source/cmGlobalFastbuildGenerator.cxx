@@ -627,8 +627,6 @@ std::set<std::string> cmGlobalFastbuildGenerator::WriteObjectLists(
                     "true", 2);
       WriteArray(*BuildFileStream, "CompilerInputFiles",
                  Wrap(ObjectList.CompilerInputFiles), 2);
-      WriteVariable(*BuildFileStream, "UnityInputFiles", ".CompilerInputFiles",
-                    2);
       if (!ObjectList.PCHInputFile.empty()) {
         WriteVariable(*BuildFileStream, "PCHInputFile",
                       Quote(ObjectList.PCHInputFile), 2);
