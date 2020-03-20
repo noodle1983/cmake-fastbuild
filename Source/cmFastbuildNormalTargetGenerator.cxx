@@ -1160,7 +1160,7 @@ cmFastbuildNormalTargetGenerator::GenerateLink(
     this->GetLocalGenerator()->ConvertToOutputFormat(
       cmSystemTools::GetCMakeCommand(), cmLocalGenerator::SHELL);
   linkerNode.VCXProject.ProjectBuildCommand = cmStrCat(cmakeCommand, " --build ", GetGlobalGenerator()->GetLocalGenerators()[0]->GetCurrentBinaryDirectory(), " --target \"", targetName, "\" --config ", configName);
-  linkerNode.VCXProject.ProjectRebuildCommand = cmStrCat(linkerNode.VCXProject.ProjectBuildCommand, " --clean-first");
+  linkerNode.VCXProject.ProjectRebuildCommand = cmStrCat(linkerNode.VCXProject.ProjectBuildCommand, " -- -clean");
 
   return { linkerNode };
 }
