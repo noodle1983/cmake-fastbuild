@@ -195,6 +195,25 @@ void cmGlobalFastbuildGenerator::Generate()
   }
 
   this->CloseBuildFileStream();
+
+#ifdef _WIN32
+  std::vector<std::string> command;
+  command.push_back(this->FastbuildCommand);
+  command.emplace_back("VSSolution-all");
+  std::string output;
+  std::string error;
+  std::string workingDir = LocalGenerators[0]->GetCurrentBinaryDirectory();
+  if (!cmSystemTools::RunSingleCommand(command, &output, &error, nullptr,
+                                       workingDir.c_str(),
+                                       cmSystemTools::OUTPUT_NONE)) {
+    LocalGenerators[0]->GetMakefile()->IssueMessage(MessageType::FATAL_ERROR,
+                                                    cmStrCat("Running\n '", cmJoin(command, "' '"),
+                                                             "'\n"
+                                                             "failed with:\n ",
+                                                             error, "\n", output));
+    cmSystemTools::SetFatalErrorOccured();
+  }
+#endif
 }
 
 void cmGlobalFastbuildGenerator::WriteBuildFileTop(std::ostream& os)
@@ -729,12 +748,26 @@ std::set<std::string> cmGlobalFastbuildGenerator::WriteLinker(
     {
       WriteVariable(*BuildFileStream, "ProjectOutput", Quote(LinkerNode.VCXProject.ProjectOutput), 2);
 
-      std::vector<std::string> ProjectFiles;
-      for(const auto& [_, files] : LinkerNode.VCXProject.ProjectFiles) {
-        for (const auto& file : files)
-          ProjectFiles.push_back(file);
+      std::vector<std::string> ProjectFiles, ProjectFilesWithFolders;
+      for(const auto& [folder, files] : LinkerNode.VCXProject.ProjectFiles) {
+        if (folder.empty()) {
+          for (const auto& file : files)
+            ProjectFiles.push_back(file);
+        } else {
+          std::string folderId = folder;
+          cmSystemTools::ReplaceString(folderId, " ", "_");
+          cmSystemTools::ReplaceString(folderId, "/", "_");
+
+          std::stringstream ss;
+          WriteVariable(ss, "Folder", Quote(folder), 2);
+          WriteArray(ss, "Files", Wrap(files), 2);
+          WriteVariable(*BuildFileStream, folderId, "[\n" + ss.str() + "]", 1);
+
+          ProjectFilesWithFolders.push_back("." + folderId);
+        }
       }
       WriteArray(*BuildFileStream, "ProjectFiles", Wrap(ProjectFiles), 2);
+      WriteArray(*BuildFileStream, "ProjectFilesWithFolders", ProjectFilesWithFolders, 2);
 
       if (!LinkerNode.VCXProject.UserProps.empty()) {
         std::stringstream ss;
