@@ -98,6 +98,9 @@ public:
   void OpenBuildFileStream();
   void CloseBuildFileStream();
 
+  bool Open(const std::string& bindir, const std::string& projectName,
+            bool dryRun) override;
+
   cmGeneratedFileStream* GetBuildFileStream() const
   {
     return this->BuildFileStream;
@@ -234,6 +237,21 @@ public:
     std::vector<std::string> ObjectOutputs;
   };
 
+  struct VCXProject
+  {
+    std::string Name;
+    std::string Folder;
+    std::string UserProps;
+    std::string LocalDebuggerCommandArguments;
+    std::string ProjectOutput;
+    std::map<std::string, std::vector<std::string>> ProjectFiles;
+    std::string Platform;
+    std::string Config;
+    std::string Target;
+    std::string ProjectBuildCommand;
+    std::string ProjectRebuildCommand;
+  };
+
   struct FastbuildLinkerNode
   {
     enum
@@ -245,11 +263,13 @@ public:
 
     std::string Name;
     std::string Compiler;
+    std::string CompilerOptions;
     std::string Linker;
     std::string LinkerType;
     std::string LinkerOutput;
     std::string LinkerOptions;
     std::vector<std::string> Libraries;
+    VCXProject VCXProject;
   };
 
   struct FastbuildExecNode

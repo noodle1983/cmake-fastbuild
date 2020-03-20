@@ -1123,6 +1123,9 @@ cmFastbuildNormalTargetGenerator::GenerateLink(
 
   // TODO: Select linker compiler
   linkerNode.Compiler = ".Compiler_dummy";
+  if (!objectLists.empty()) {
+    linkerNode.CompilerOptions = objectLists.front().CompilerOptions;
+  }
   linkerNode.Name = targetName;
   linkerNode.Linker = executable;
   linkerNode.LinkerType = linkerType;
@@ -1131,6 +1134,33 @@ cmFastbuildNormalTargetGenerator::GenerateLink(
   linkerNode.Libraries = dependencies;
   for (const auto& objectList : objectLists)
     linkerNode.Libraries.push_back(objectList.Name);
+
+  std::string targetCompileOutDirectory =
+    this->GeneratorTarget->GetSupportDirectory();
+
+  linkerNode.VCXProject.UserProps = this->GeneratorTarget->GetSafeProperty("VS_USER_PROPS");
+  cmSystemTools::ReplaceString(linkerNode.VCXProject.UserProps, "/", "\\");
+
+  linkerNode.VCXProject.LocalDebuggerCommandArguments = this->GeneratorTarget->GetSafeProperty("VS_DEBUGGER_COMMAND_ARGUMENTS");
+
+  linkerNode.VCXProject.Name = targetName + "-vcxproj";
+  linkerNode.VCXProject.ProjectOutput = ConvertToFastbuildPath(targetCompileOutDirectory +  "/" + targetName+ ".vcxproj");
+  linkerNode.VCXProject.Platform = "X64";
+  linkerNode.VCXProject.Config = configName;
+  linkerNode.VCXProject.Target = targetName;
+  linkerNode.VCXProject.Folder = GeneratorTarget->GetSafeProperty("FOLDER");
+
+  std::vector<cmSourceGroup> sourceGroups = this->Makefile->GetSourceGroups();
+  for (const BT<cmSourceFile*>& source : GeneratorTarget->GetSourceFiles(configName)) {
+      cmSourceGroup* sourceGroup =
+        this->Makefile->FindSourceGroup(source.Value->ResolveFullPath(), sourceGroups);
+    linkerNode.VCXProject.ProjectFiles[sourceGroup->GetFullName()].push_back(ConvertToFastbuildPath(source.Value->GetFullPath()));
+  }
+  std::string cmakeCommand =
+    this->GetLocalGenerator()->ConvertToOutputFormat(
+      cmSystemTools::GetCMakeCommand(), cmLocalGenerator::SHELL);
+  linkerNode.VCXProject.ProjectBuildCommand = cmStrCat(cmakeCommand, " --build ", GetGlobalGenerator()->GetLocalGenerators()[0]->GetCurrentBinaryDirectory(), " --target \"", targetName, "\" --config ", configName);
+  linkerNode.VCXProject.ProjectRebuildCommand = cmStrCat(linkerNode.VCXProject.ProjectBuildCommand, " --clean-first");
 
   return { linkerNode };
 }

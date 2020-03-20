@@ -12,6 +12,15 @@
 
 #include "cmGlobalFastbuildGenerator.h"
 
+#include <future>
+
+#ifdef _WIN32
+#include <windows.h>
+
+#include <objbase.h>
+#include <shellapi.h>
+#endif
+
 #include "cmComputeLinkInformation.h"
 #include "cmCustomCommandGenerator.h"
 #include "cmDocumentationEntry.h"
@@ -706,13 +715,48 @@ std::set<std::string> cmGlobalFastbuildGenerator::WriteLinker(
                       Quote(LinkerNode.LinkerType), 2);
         WriteVariable(*BuildFileStream, "Compiler", LinkerNode.Compiler, 2);
         WriteVariable(*BuildFileStream, "CompilerOptions",
-                      "'-c $FB_INPUT_1_PLACEHOLDER$ $FB_INPUT_2_PLACEHOLDER$'",
+                      Quote(LinkerNode.CompilerOptions),
                       2);
         WriteVariable(*BuildFileStream, "CompilerOutputPath", "'/dummy/'", 2);
       }
       Indent(*BuildFileStream, 1);
       *BuildFileStream << "}\n";
     }
+#ifdef _WIN32
+    WriteCommand(*BuildFileStream, "VCXProject", Quote(LinkerNode.VCXProject.Name), 1);
+    Indent(*BuildFileStream, 1);
+    *BuildFileStream << "{\n";
+    {
+      WriteVariable(*BuildFileStream, "ProjectOutput", Quote(LinkerNode.VCXProject.ProjectOutput), 2);
+
+      std::vector<std::string> ProjectFiles;
+      for(const auto& [_, files] : LinkerNode.VCXProject.ProjectFiles) {
+        for (const auto& file : files)
+          ProjectFiles.push_back(file);
+      }
+      WriteArray(*BuildFileStream, "ProjectFiles", Wrap(ProjectFiles), 2);
+
+      if (!LinkerNode.VCXProject.UserProps.empty()) {
+        std::stringstream ss;
+        WriteVariable(ss, "Condition", Quote("Exists('"+LinkerNode.VCXProject.UserProps+"')"), 3);
+        WriteVariable(ss, "Project", Quote(LinkerNode.VCXProject.UserProps), 3);
+        WriteVariable(*BuildFileStream, "UserProps", "[\n" + ss.str() + "]", 2);
+        WriteArray(*BuildFileStream, "ProjectProjectImports", {".UserProps"}, 2);
+      }
+      if (!LinkerNode.VCXProject.LocalDebuggerCommandArguments.empty()) {
+        WriteVariable(*BuildFileStream, "LocalDebuggerCommandArguments", Quote(LinkerNode.VCXProject.LocalDebuggerCommandArguments), 2);
+      }
+      std::stringstream ss;
+      WriteVariable(ss, "Platform", Quote(LinkerNode.VCXProject.Platform), 3);
+      WriteVariable(ss, "Config", Quote(LinkerNode.VCXProject.Config), 3);
+      WriteVariable(ss, "Target", Quote(LinkerNode.VCXProject.Target), 3);
+      WriteVariable(ss, "ProjectBuildCommand", Quote(LinkerNode.VCXProject.ProjectBuildCommand), 3);
+      WriteVariable(ss, "ProjectRebuildCommand", Quote(LinkerNode.VCXProject.ProjectRebuildCommand), 3);
+      WriteVariable(*BuildFileStream, "ProjectConfigs", "[\n" + ss.str() + "]", 2);
+    }
+    Indent(*BuildFileStream, 1);
+    *BuildFileStream << "}\n";
+#endif
   }
 
   return output;
@@ -927,6 +971,8 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
     }
   }
 
+  std::string VSConfig, VSPlatform;
+  std::map<std::string, std::vector<std::string>> VSProjects;
   std::set<std::string> allCustomCommands;
   for (const auto& targetName : orderedTargets) {
     auto& Target = FastbuildTargets[targetName];
@@ -993,9 +1039,52 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
         this->WriteAlias(Target.Name, products);
       }
     }
-
     *this->GetBuildFileStream() << "}\n";
+
+    for (const auto& node : Target.LinkerNodes) {
+      VSProjects[node.VCXProject.Folder].push_back(node.VCXProject.Name);
+      VSConfig = node.VCXProject.Config;
+      VSPlatform = node.VCXProject.Platform;
+    }
   }
+
+#ifdef _WIN32
+  WriteCommand(*BuildFileStream, "VSSolution", Quote("VSSolution-all"));
+  *BuildFileStream << "{\n";
+  {
+    WriteVariable(*BuildFileStream, "SolutionOutput", Quote(cmStrCat(LocalGenerators[0]->GetCurrentBinaryDirectory(), "/", LocalGenerators[0]->GetProjectName(), ".sln")), 1);
+
+    std::vector<std::string> SolutionProjects;
+    for (const auto& [_, projects] : VSProjects) {
+      for (const auto& project : projects)
+        SolutionProjects.push_back(project);
+    }
+    WriteArray(*BuildFileStream, "SolutionProjects", Wrap(SolutionProjects), 1);
+    std::stringstream ss;
+    WriteVariable(ss, "Platform", Quote(VSPlatform), 2);
+    WriteVariable(ss, "Config", Quote(VSConfig), 2);
+    WriteVariable(*BuildFileStream, "SolutionConfig", "[\n" + ss.str() + "]", 1);
+    WriteArray(*BuildFileStream, "SolutionConfigs", {".SolutionConfig"}, 1);
+    std::vector<std::string> SolutionFolders;
+    for (const auto& [folder, projects] : VSProjects) {
+      if (folder.empty()) continue;
+
+      std::string folderId = folder;
+      cmSystemTools::ReplaceString(folderId, " ", "_");
+      cmSystemTools::ReplaceString(folderId, "/", "_");
+
+      std::stringstream ss;
+      WriteVariable(ss, "Path", Quote(folder), 2);
+      WriteArray(ss, "Projects", Wrap(projects), 2);
+      WriteVariable(*BuildFileStream, folderId, "[\n" + ss.str() + "]", 1);
+
+      SolutionFolders.push_back("." + folderId);
+    }
+    if (!SolutionFolders.empty())
+      WriteArray(*BuildFileStream, "SolutionFolders", SolutionFolders, 1);
+  }
+#endif
+  *BuildFileStream << "}\n";
 }
 
 std::string cmGlobalFastbuildGenerator::GetTargetName(
@@ -1012,4 +1101,39 @@ std::string cmGlobalFastbuildGenerator::GetTargetName(
 bool cmGlobalFastbuildGenerator::IsExcluded(cmGeneratorTarget* target)
 {
   return cmGlobalGenerator::IsExcluded(LocalGenerators[0].get(), target);
+}
+
+bool cmGlobalFastbuildGenerator::Open(const std::string& bindir,
+                                         const std::string& projectName,
+                                         bool dryRun)
+{
+#ifdef _WIN32
+  std::string sln = bindir + "/" + projectName + ".sln";
+
+  if (dryRun) {
+    return cmSystemTools::FileExists(sln, true);
+  }
+
+  sln = cmSystemTools::ConvertToOutputPath(sln);
+
+  auto OpenSolution = [](std::string sln)
+  {
+    HRESULT comInitialized =
+      CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    if (FAILED(comInitialized)) {
+      return false;
+    }
+
+    HINSTANCE hi =
+      ShellExecuteA(NULL, "open", sln.c_str(), NULL, NULL, SW_SHOWNORMAL);
+
+    CoUninitialize();
+
+    return reinterpret_cast<intptr_t>(hi) > 32;
+  };
+
+  return std::async(std::launch::async, OpenSolution, sln).get();
+#else
+  return cmGlobalCommonGenerator::Open(bindir, projectName, dryRun);
+#endif
 }
