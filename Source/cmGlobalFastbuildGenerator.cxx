@@ -1008,7 +1008,8 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
   }
 
   std::string VSConfig, VSPlatform;
-  std::map<std::string, std::vector<std::string>> VSProjects;
+  std::vector<std::string> SolutionBuildProjects;
+  std::map<std::string, std::vector<std::string>> VSProjects, VSDependencies;
   std::set<std::string> allCustomCommands;
   for (const auto& targetName : orderedTargets) {
     auto& Target = FastbuildTargets[targetName];
@@ -1078,7 +1079,15 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
     *this->GetBuildFileStream() << "}\n";
 
     for (const auto& node : Target.LinkerNodes) {
+    if (node.Type == FastbuildLinkerNode::EXECUTABLE) {
+        SolutionBuildProjects.push_back(node.VCXProject.Name);
+    }
       VSProjects[node.VCXProject.Folder].push_back(node.VCXProject.Name);
+      for (const auto& dep : Target.Dependencies) {
+          for (const auto& depNode : FastbuildTargets.at(dep).LinkerNodes) {
+              VSDependencies[node.VCXProject.Name].push_back(depNode.VCXProject.Name);
+          }
+      }
       VSConfig = node.VCXProject.Config;
       VSPlatform = node.VCXProject.Platform;
     }
@@ -1118,6 +1127,25 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
     }
     if (!SolutionFolders.empty())
       WriteArray(*BuildFileStream, "SolutionFolders", SolutionFolders, 1);
+
+    std::vector<std::string> SolutionDependencies;
+    for (const auto& [project, dependencies] : VSDependencies) {
+        std::string depsId = project + "_deps";
+
+        cmSystemTools::ReplaceString(depsId, "-", "_");
+
+        std::stringstream ss;
+        WriteArray(ss, "Projects", Wrap(std::vector<std::string>{project}), 2);
+        WriteArray(ss, "Dependencies", Wrap(dependencies), 2);
+        WriteVariable(*BuildFileStream, depsId, "[\n" + ss.str() + "]", 1);
+
+        SolutionDependencies.push_back("." + depsId);
+    }
+    if (!SolutionDependencies.empty())
+        WriteArray(*BuildFileStream, "SolutionDependencies", SolutionDependencies, 1);
+
+    if (!SolutionBuildProjects.empty())
+        WriteArray(*BuildFileStream, "SolutionBuildProject", Wrap(SolutionBuildProjects), 1);
   }
 #endif
   *BuildFileStream << "}\n";
