@@ -242,6 +242,7 @@ public:
     std::string Name;
     std::string Folder;
     std::string UserProps;
+    std::string LocalDebuggerCommand;
     std::string LocalDebuggerCommandArguments;
     std::string ProjectOutput;
     std::map<std::string, std::vector<std::string>> ProjectFiles;
