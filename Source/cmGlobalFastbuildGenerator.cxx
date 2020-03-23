@@ -776,6 +776,9 @@ std::set<std::string> cmGlobalFastbuildGenerator::WriteLinker(
         WriteVariable(*BuildFileStream, "UserProps", "[\n" + ss.str() + "]", 2);
         WriteArray(*BuildFileStream, "ProjectProjectImports", {".UserProps"}, 2);
       }
+        if (!LinkerNode.VCXProject.LocalDebuggerCommand.empty()) {
+        WriteVariable(*BuildFileStream, "LocalDebuggerCommand", Quote(LinkerNode.VCXProject.LocalDebuggerCommand), 2);
+        }
       if (!LinkerNode.VCXProject.LocalDebuggerCommandArguments.empty()) {
         WriteVariable(*BuildFileStream, "LocalDebuggerCommandArguments", Quote(LinkerNode.VCXProject.LocalDebuggerCommandArguments), 2);
       }

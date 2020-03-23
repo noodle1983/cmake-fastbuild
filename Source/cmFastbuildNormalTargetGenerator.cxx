@@ -1141,6 +1141,7 @@ cmFastbuildNormalTargetGenerator::GenerateLink(
   linkerNode.VCXProject.UserProps = this->GeneratorTarget->GetSafeProperty("VS_USER_PROPS");
   cmSystemTools::ReplaceString(linkerNode.VCXProject.UserProps, "/", "\\");
 
+  linkerNode.VCXProject.LocalDebuggerCommand = targetNames.targetOutput;
   linkerNode.VCXProject.LocalDebuggerCommandArguments = this->GeneratorTarget->GetSafeProperty("VS_DEBUGGER_COMMAND_ARGUMENTS");
 
   linkerNode.VCXProject.Name = targetName + "-vcxproj";
