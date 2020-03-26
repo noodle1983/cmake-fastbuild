@@ -237,7 +237,7 @@ public:
     std::vector<std::string> ObjectOutputs;
   };
 
-  struct VCXProject
+  struct FastbuildVCXProject
   {
     std::string Name;
     std::string Folder;
@@ -270,7 +270,6 @@ public:
     std::string LinkerOutput;
     std::string LinkerOptions;
     std::vector<std::string> Libraries;
-    VCXProject VCXProject;
   };
 
   struct FastbuildExecNode
@@ -299,6 +298,7 @@ public:
     std::map<std::string, std::string> Variables;
     std::vector<FastbuildObjectListNode> ObjectListNodes;
     std::vector<FastbuildLinkerNode> LinkerNodes;
+    std::vector<FastbuildVCXProject> VCXProjects;
     std::vector<FastbuildExecNode> PreBuildExecNodes, PreLinkExecNodes,
       PostBuildExecNodes, ExecNodes;
     std::vector<FastbuildAliasNode> AliasNodes;
