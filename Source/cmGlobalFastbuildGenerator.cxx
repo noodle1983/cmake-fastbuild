@@ -741,58 +741,6 @@ std::set<std::string> cmGlobalFastbuildGenerator::WriteLinker(
       Indent(*BuildFileStream, 1);
       *BuildFileStream << "}\n";
     }
-#ifdef _WIN32
-    WriteCommand(*BuildFileStream, "VCXProject", Quote(LinkerNode.VCXProject.Name), 1);
-    Indent(*BuildFileStream, 1);
-    *BuildFileStream << "{\n";
-    {
-      WriteVariable(*BuildFileStream, "ProjectOutput", Quote(LinkerNode.VCXProject.ProjectOutput), 2);
-
-      std::vector<std::string> ProjectFiles, ProjectFilesWithFolders;
-      for(const auto& [folder, files] : LinkerNode.VCXProject.ProjectFiles) {
-        if (folder.empty()) {
-          for (const auto& file : files)
-            ProjectFiles.push_back(file);
-        } else {
-          std::string folderId = folder;
-          cmSystemTools::ReplaceString(folderId, " ", "_");
-          cmSystemTools::ReplaceString(folderId, "/", "_");
-
-          std::stringstream ss;
-          WriteVariable(ss, "Folder", Quote(folder), 2);
-          WriteArray(ss, "Files", Wrap(files), 2);
-          WriteVariable(*BuildFileStream, folderId, "[\n" + ss.str() + "]", 1);
-
-          ProjectFilesWithFolders.push_back("." + folderId);
-        }
-      }
-      WriteArray(*BuildFileStream, "ProjectFiles", Wrap(ProjectFiles), 2);
-      WriteArray(*BuildFileStream, "ProjectFilesWithFolders", ProjectFilesWithFolders, 2);
-
-      if (!LinkerNode.VCXProject.UserProps.empty()) {
-        std::stringstream ss;
-        WriteVariable(ss, "Condition", Quote("Exists('"+LinkerNode.VCXProject.UserProps+"')"), 3);
-        WriteVariable(ss, "Project", Quote(LinkerNode.VCXProject.UserProps), 3);
-        WriteVariable(*BuildFileStream, "UserProps", "[\n" + ss.str() + "]", 2);
-        WriteArray(*BuildFileStream, "ProjectProjectImports", {".UserProps"}, 2);
-      }
-        if (!LinkerNode.VCXProject.LocalDebuggerCommand.empty()) {
-        WriteVariable(*BuildFileStream, "LocalDebuggerCommand", Quote(LinkerNode.VCXProject.LocalDebuggerCommand), 2);
-        }
-      if (!LinkerNode.VCXProject.LocalDebuggerCommandArguments.empty()) {
-        WriteVariable(*BuildFileStream, "LocalDebuggerCommandArguments", Quote(LinkerNode.VCXProject.LocalDebuggerCommandArguments), 2);
-      }
-      std::stringstream ss;
-      WriteVariable(ss, "Platform", Quote(LinkerNode.VCXProject.Platform), 3);
-      WriteVariable(ss, "Config", Quote(LinkerNode.VCXProject.Config), 3);
-      WriteVariable(ss, "Target", Quote(LinkerNode.VCXProject.Target), 3);
-      WriteVariable(ss, "ProjectBuildCommand", Quote(LinkerNode.VCXProject.ProjectBuildCommand), 3);
-      WriteVariable(ss, "ProjectRebuildCommand", Quote(LinkerNode.VCXProject.ProjectRebuildCommand), 3);
-      WriteVariable(*BuildFileStream, "ProjectConfigs", "[\n" + ss.str() + "]", 2);
-    }
-    Indent(*BuildFileStream, 1);
-    *BuildFileStream << "}\n";
-#endif
   }
 
   return output;
@@ -863,6 +811,28 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
     allTarget.Name = allNode.Name = "all";
     allTarget.AliasNodes.push_back(allNode);
     allTarget.IsGlobal = true;
+
+#ifdef _WIN32
+    auto& VCXProject = allTarget.VCXProjects.emplace_back();
+    std::string targetName = "ALL_BUILD";
+
+    std::string targetCompileOutDirectory =
+        this->LocalGenerators[0]->GetCurrentBinaryDirectory();
+
+    VCXProject.Name = "all-vcxproj";
+    VCXProject.ProjectOutput = ConvertToFastbuildPath(targetCompileOutDirectory + "/" + targetName + ".vcxproj");
+    VCXProject.Platform = "X64";
+    VCXProject.Config = ((cmLocalCommonGenerator*)this->LocalGenerators[0].get())->GetConfigNames().front();
+    VCXProject.Target = "all";
+    VCXProject.Folder = "CMakePredefinedTargets";
+
+    std::string cmakeCommand =
+        this->LocalGenerators[0]->ConvertToOutputFormat(
+            cmSystemTools::GetCMakeCommand(), cmLocalGenerator::SHELL);
+    VCXProject.ProjectBuildCommand = cmStrCat(cmakeCommand, " --build ", LocalGenerators[0]->GetCurrentBinaryDirectory(), " --target \"all\" --config ", VCXProject.Config);
+    VCXProject.ProjectRebuildCommand = cmStrCat(VCXProject.ProjectBuildCommand, " -- -clean");
+#endif
+
     FastbuildTargets[allTarget.Name] = allTarget;
   }
 
@@ -1008,7 +978,6 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
   }
 
   std::string VSConfig, VSPlatform;
-  std::vector<std::string> SolutionBuildProjects;
   std::map<std::string, std::vector<std::string>> VSProjects, VSDependencies;
   std::set<std::string> allCustomCommands;
   for (const auto& targetName : orderedTargets) {
@@ -1063,12 +1032,13 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
     if (!Target.IsGlobal) {
       if (targetNodes.find(Target.Name) == targetNodes.end()) {
         this->WriteAlias(Target.Name, products);
-        products = { Target.Name };
       }
       for (const auto& object : objectLists)
           products.erase(object);
       for (const auto& link : linked)
           products.erase(link);
+      if (products.empty())
+        products.insert(Target.Name);
       this->WriteAlias(Target.Name + "-products", products);
     } else if (Target.AliasNodes.empty()) {
       if (std::find(products.begin(), products.end(), Target.Name) ==
@@ -1076,21 +1046,74 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
         this->WriteAlias(Target.Name, products);
       }
     }
-    *this->GetBuildFileStream() << "}\n";
+#ifdef _WIN32
+    for (const auto& VCXProject : Target.VCXProjects) {
+        WriteCommand(*BuildFileStream, "VCXProject", Quote(VCXProject.Name), 1);
+        Indent(*BuildFileStream, 1);
+        *BuildFileStream << "{\n";
+        {
+            WriteVariable(*BuildFileStream, "ProjectOutput", Quote(VCXProject.ProjectOutput), 2);
 
-    for (const auto& node : Target.LinkerNodes) {
-    if (node.Type == FastbuildLinkerNode::EXECUTABLE) {
-        SolutionBuildProjects.push_back(node.VCXProject.Name);
+            std::vector<std::string> ProjectFiles, ProjectFilesWithFolders;
+            for (const auto& [folder, files] : VCXProject.ProjectFiles) {
+                if (folder.empty()) {
+                    for (const auto& file : files)
+                        ProjectFiles.push_back(file);
+                }
+                else {
+                    std::string folderId = folder;
+                    cmSystemTools::ReplaceString(folderId, " ", "_");
+                    cmSystemTools::ReplaceString(folderId, "/", "_");
+
+                    std::stringstream ss;
+                    WriteVariable(ss, "Folder", Quote(folder), 2);
+                    WriteArray(ss, "Files", Wrap(files), 2);
+                    WriteVariable(*BuildFileStream, folderId, "[\n" + ss.str() + "]", 1);
+
+                    ProjectFilesWithFolders.push_back("." + folderId);
+                }
+            }
+            if (!ProjectFiles.empty())
+                WriteArray(*BuildFileStream, "ProjectFiles", Wrap(ProjectFiles), 2);
+            if (!ProjectFilesWithFolders.empty())
+                WriteArray(*BuildFileStream, "ProjectFilesWithFolders", ProjectFilesWithFolders, 2);
+
+            if (!VCXProject.UserProps.empty()) {
+                std::stringstream ss;
+                WriteVariable(ss, "Condition", Quote("Exists('" + VCXProject.UserProps + "')"), 3);
+                WriteVariable(ss, "Project", Quote(VCXProject.UserProps), 3);
+                WriteVariable(*BuildFileStream, "UserProps", "[\n" + ss.str() + "]", 2);
+                WriteArray(*BuildFileStream, "ProjectProjectImports", { ".UserProps" }, 2);
+            }
+            if (!VCXProject.LocalDebuggerCommand.empty()) {
+                WriteVariable(*BuildFileStream, "LocalDebuggerCommand", Quote(VCXProject.LocalDebuggerCommand), 2);
+            }
+            if (!VCXProject.LocalDebuggerCommandArguments.empty()) {
+                WriteVariable(*BuildFileStream, "LocalDebuggerCommandArguments", Quote(VCXProject.LocalDebuggerCommandArguments), 2);
+            }
+            std::stringstream ss;
+            WriteVariable(ss, "Platform", Quote(VCXProject.Platform), 3);
+            WriteVariable(ss, "Config", Quote(VCXProject.Config), 3);
+            WriteVariable(ss, "Target", Quote(VCXProject.Target), 3);
+            WriteVariable(ss, "ProjectBuildCommand", Quote(VCXProject.ProjectBuildCommand), 3);
+            WriteVariable(ss, "ProjectRebuildCommand", Quote(VCXProject.ProjectRebuildCommand), 3);
+            WriteVariable(*BuildFileStream, "ProjectConfigs", "[\n" + ss.str() + "]", 2);
+        }
+        Indent(*BuildFileStream, 1);
+        *BuildFileStream << "}\n";
+
+        VSProjects[VCXProject.Folder].push_back(VCXProject.Name);
+        for (const auto& dep : Target.Dependencies) {
+            for (const auto& depVCXProject : FastbuildTargets.at(dep).VCXProjects) {
+                VSDependencies[VCXProject.Name].push_back(depVCXProject.Name);
+            }
+        }
+        VSConfig = VCXProject.Config;
+        VSPlatform = VCXProject.Platform;
     }
-      VSProjects[node.VCXProject.Folder].push_back(node.VCXProject.Name);
-      for (const auto& dep : Target.Dependencies) {
-          for (const auto& depNode : FastbuildTargets.at(dep).LinkerNodes) {
-              VSDependencies[node.VCXProject.Name].push_back(depNode.VCXProject.Name);
-          }
-      }
-      VSConfig = node.VCXProject.Config;
-      VSPlatform = node.VCXProject.Platform;
-    }
+#endif
+
+    *this->GetBuildFileStream() << "}\n";
   }
 
 #ifdef _WIN32
@@ -1144,8 +1167,7 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
     if (!SolutionDependencies.empty())
         WriteArray(*BuildFileStream, "SolutionDependencies", SolutionDependencies, 1);
 
-    if (!SolutionBuildProjects.empty())
-        WriteArray(*BuildFileStream, "SolutionBuildProject", Wrap(SolutionBuildProjects), 1);
+     WriteVariable(*BuildFileStream, "SolutionBuildProject", Quote(FastbuildTargets.at("all").VCXProjects.front().Name), 1);
   }
 #endif
   *BuildFileStream << "}\n";
