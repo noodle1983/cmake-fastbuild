@@ -122,8 +122,9 @@ cmGlobalFastbuildGenerator::GenerateBuildCommand(
   // Push in the make options
   makeCommand.Add(makeOptions.begin(), makeOptions.end());
 
-  makeCommand.Add("-showcmds");
-  // makeCommand.Add("-quiet");
+  //makeCommand.Add("-showcmds");
+  //makeCommand.Add("-quiet");
+  makeCommand.Add("-monitor");
   makeCommand.Add("-ide");
   makeCommand.Add("-cache");
 
