@@ -978,6 +978,7 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
   }
 
   std::string VSConfig, VSPlatform;
+  std::vector<std::string> SolutionBuildProjects;
   std::map<std::string, std::vector<std::string>> VSProjects, VSDependencies;
   std::set<std::string> allCustomCommands;
   for (const auto& targetName : orderedTargets) {
@@ -1048,6 +1049,9 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
     }
 #ifdef _WIN32
     for (const auto& VCXProject : Target.VCXProjects) {
+        if (!Target.IsGlobal && Target.LinkerNodes.front().Type == FastbuildLinkerNode::EXECUTABLE)
+            SolutionBuildProjects.push_back(VCXProject.Name);
+
         WriteCommand(*BuildFileStream, "VCXProject", Quote(VCXProject.Name), 1);
         Indent(*BuildFileStream, 1);
         *BuildFileStream << "{\n";
@@ -1167,7 +1171,7 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
     if (!SolutionDependencies.empty())
         WriteArray(*BuildFileStream, "SolutionDependencies", SolutionDependencies, 1);
 
-     WriteVariable(*BuildFileStream, "SolutionBuildProject", Quote(FastbuildTargets.at("all").VCXProjects.front().Name), 1);
+     WriteArray(*BuildFileStream, "SolutionBuildProject", Wrap(SolutionBuildProjects), 1);
   }
 #endif
   *BuildFileStream << "}\n";
