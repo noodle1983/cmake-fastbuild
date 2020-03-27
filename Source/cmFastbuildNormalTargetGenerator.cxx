@@ -987,7 +987,9 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
 
   std::vector<std::string> objectNames;
   std::unordered_multimap<std::string, std::string> dependencies;
-  for (const auto& [name, object] : objectsByName) {
+  // HACK: Makes sure that the CUDA object files go to the bottom, makes it easier for Fastbuild to pick the right includes
+  for (auto rit = objectsByName.rbegin(); rit != objectsByName.rend();++rit) {
+      const auto& [name, object] = *rit;
     objectNames.push_back(object.Name);
     for (const auto& dependency : object.PreBuildDependencies) {
       dependencies.emplace(object.Name, dependency);
