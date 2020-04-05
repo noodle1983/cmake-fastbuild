@@ -1005,14 +1005,6 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
 
     std::set<std::string> targetNodes;
     std::set<std::string> dependencies;
-    // We want to depend on the products, this way we make sure we are waiting
-    // for all generations
-    for (const auto& dep : Target.Dependencies) {
-      if (!FastbuildTargets.at(dep).IsGlobal)
-        dependencies.insert(dep + "-products");
-      else
-        dependencies.insert(dep);
-    }
     dependencies = this->WriteExecs(Target.PreBuildExecNodes, dependencies);
     targetNodes.insert(dependencies.begin(), dependencies.end());
     dependencies = this->WriteExecs(Target.ExecNodes, dependencies);
@@ -1022,6 +1014,14 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
     targetNodes.insert(objectLists.begin(), objectLists.end());
     dependencies = this->WriteExecs(Target.PreLinkExecNodes, objectLists.empty() ? dependencies : objectLists);
     targetNodes.insert(dependencies.begin(), dependencies.end());
+    // We want to depend on the products, this way we make sure we are waiting
+    // for all generations
+    for (const auto& dep : Target.Dependencies) {
+        if (!FastbuildTargets.at(dep).IsGlobal)
+            dependencies.insert(dep + "-products");
+        else
+            dependencies.insert(dep);
+    }
     auto linked = this->WriteLinker(Target.LinkerNodes, dependencies);
     targetNodes.insert(linked.begin(), linked.end());
     auto products = this->WriteExecs(Target.PostBuildExecNodes, linked.empty() ? dependencies  : linked);
