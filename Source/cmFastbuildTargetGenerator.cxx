@@ -305,10 +305,10 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
 
     std::string launcher;
 
-    const char* property_value =
+    const cmProp property_value =
       this->Makefile->GetProperty("RULE_LAUNCH_CUSTOM");
 
-    if (property_value && *property_value) {
+    if (property_value && !property_value->empty()) {
       // Expand rule variables referenced in the given launcher command.
       cmRulePlaceholderExpander::RuleVariables vars;
 
@@ -328,7 +328,7 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
       std::unique_ptr<cmRulePlaceholderExpander> rulePlaceholderExpander(
         this->LocalGenerator->CreateRulePlaceholderExpander());
 
-      std::string launcher = property_value;
+      std::string launcher = *property_value;
       rulePlaceholderExpander->ExpandRuleVariables(this->LocalGenerator,
                                                    launcher, vars);
       if (!launcher.empty()) {

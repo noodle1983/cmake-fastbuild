@@ -288,7 +288,7 @@ bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
   cmRulePlaceholderExpander::RuleVariables vars;
   vars.CMTargetName = this->GeneratorTarget->GetName().c_str();
   vars.CMTargetType =
-    cmState::GetTargetTypeName(this->GeneratorTarget->GetType());
+    cmState::GetTargetTypeName(this->GeneratorTarget->GetType()).c_str();
   vars.Language = linkLanguage.c_str();
   const std::string manifests = this->GetManifestsAsFastbuildPath();
   vars.Manifests = manifests.c_str();
@@ -676,7 +676,7 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
     cmRulePlaceholderExpander::RuleVariables compileObjectVars;
     compileObjectVars.CMTargetName = GeneratorTarget->GetName().c_str();
     compileObjectVars.CMTargetType =
-      cmState::GetTargetTypeName(GeneratorTarget->GetType());
+      cmState::GetTargetTypeName(GeneratorTarget->GetType()).c_str();
     compileObjectVars.Language = language.c_str();
     compileObjectVars.Source =
       FASTBUILD_DOLLAR_TAG "FB_INPUT_1_PLACEHOLDER" FASTBUILD_DOLLAR_TAG;
