@@ -127,6 +127,7 @@ cmGlobalFastbuildGenerator::GenerateBuildCommand(
   makeCommand.Add("-monitor");
   makeCommand.Add("-ide");
   makeCommand.Add("-cache");
+  makeCommand.Add("-wait");
 
   if (!configFile.empty()) {
     makeCommand.Add("-config", configFile);
