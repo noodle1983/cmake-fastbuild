@@ -655,8 +655,6 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
   // Write the object list definitions for each language
   // stored in this target
   for (const std::string& language : languages) {
-    std::string ruleObjectGroupName = "ObjectGroup_" + language;
-
     const std::string pchSource =
       this->GeneratorTarget->GetPchSource(configName, language);
     const std::string pchFile =
@@ -893,7 +891,7 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
     }
 
     // Iterate over all subObjectGroups
-    std::string objectGroupRuleName = targetName + "-" + ruleObjectGroupName;
+    std::string objectGroupRuleName = cmStrCat(language, "_ObjectGroup_", targetName);
     std::vector<std::string> configObjectGroups;
     int groupNameCount = 1;
     for (const auto& [key, command] : commandPermutations) {
@@ -901,15 +899,13 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
         std::string targetCompileOutDirectory =
           this->GeneratorTarget->GetSupportDirectory();
 
-        std::stringstream ruleName;
-        ruleName << objectGroupRuleName << "-" << folderName << "-"
-                 << (groupNameCount++);
+        const auto ruleName = cmStrCat(objectGroupRuleName, "-", folderName, "-", std::to_string(groupNameCount++));
 
         cmGlobalFastbuildGenerator::FastbuildObjectListNode objectListNode;
 
-        configObjectGroups.push_back(ruleName.str());
+        configObjectGroups.push_back(ruleName);
 
-        objectListNode.Name = ruleName.str();
+        objectListNode.Name = ruleName;
         objectListNode.Compiler = "." + compilerId;
         objectListNode.CompilerOptions = command.flags;
         objectListNode.CompilerInputFiles =
@@ -987,14 +983,14 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
 
   std::vector<std::string> objectNames;
   std::unordered_multimap<std::string, std::string> dependencies;
-  // HACK: Makes sure that the CUDA object files go to the bottom, makes it easier for Fastbuild to pick the right includes
-  for (auto rit = objectsByName.rbegin(); rit != objectsByName.rend();++rit) {
-      const auto& [name, object] = *rit;
+  for (const auto& [name, object] : objectsByName) {
     objectNames.push_back(object.Name);
     for (const auto& dependency : object.PreBuildDependencies) {
       dependencies.emplace(object.Name, dependency);
     }
   }
+  // HACK: Makes sure that the CUDA object files go to the bottom, makes it easier for Fastbuild to pick the right includes
+  std::partition(objectNames.begin(), objectNames.end(), [](const auto& name) { return name.substr(0, 2) ==  "C_" || name.substr(0, 4) == "CXX_"; });
   cmGlobalFastbuildGenerator::SortByDependencies(objectNames, dependencies);
 
   std::vector<cmGlobalFastbuildGenerator::FastbuildObjectListNode> objects;
