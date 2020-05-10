@@ -359,7 +359,7 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
             }
         }
     }
-    execNode.ExecAlways = outputs.empty();
+    execNode.ExecAlways = inputs.empty();
     for (std::string const& output : cc.GetByproducts()) {
         if (cmSourceFile* sf = this->Makefile->GetSource(output)) {
             if (!sf->GetPropertyAsBool("SYMBOLIC")) {
