@@ -93,7 +93,7 @@ public:
 
   bool IsIPOSupported() const override { return true; }
 
-  static std::string RequiredFastbuildVersion() { return "0.99"; }
+  static std::string RequiredFastbuildVersion() { return "1.00"; }
 
   void OpenBuildFileStream();
   void CloseBuildFileStream();
