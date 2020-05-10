@@ -658,12 +658,14 @@ std::set<std::string> cmGlobalFastbuildGenerator::WriteObjectLists(
       WriteArray(*BuildFileStream, "CompilerInputFiles",
                  Wrap(ObjectList.CompilerInputFiles), 2);
       if (!ObjectList.PCHInputFile.empty()) {
-        WriteVariable(*BuildFileStream, "PCHInputFile",
-                      Quote(ObjectList.PCHInputFile), 2);
+          WriteVariable(*BuildFileStream, "PCHInputFile",
+              Quote(ObjectList.PCHInputFile), 2);
+          WriteVariable(*BuildFileStream, "PCHOptions",
+              Quote(ObjectList.PCHOptions), 2);
+      }
+      if(!ObjectList.PCHOutputFile.empty()) {
         WriteVariable(*BuildFileStream, "PCHOutputFile",
                       Quote(ObjectList.PCHOutputFile), 2);
-        WriteVariable(*BuildFileStream, "PCHOptions",
-                      Quote(ObjectList.PCHOptions), 2);
       }
     }
     Indent(*BuildFileStream, 1);
