@@ -979,6 +979,22 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
     }
   }
 
+  // Reuse precompiled headers whenever possible
+  std::set<std::string> pch;
+  for (const auto& targetName : orderedTargets) {
+      auto& Target = FastbuildTargets[targetName];
+
+      for (auto& objNode : Target.ObjectListNodes) {
+          if (pch.count(objNode.PCHOutputFile)) {
+              objNode.PCHInputFile.clear();
+              objNode.PCHOptions.clear();
+          }
+          else {
+              pch.insert(objNode.PCHOutputFile);
+          }
+      }
+  }
+
   std::string VSConfig, VSPlatform;
   std::vector<std::string> SolutionBuildProjects;
   std::map<std::string, std::vector<std::string>> VSProjects, VSDependencies;
