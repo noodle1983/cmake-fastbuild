@@ -73,9 +73,9 @@ void cmFastbuildNormalTargetGenerator::DetectCompilerFlags(
     this->GetLocalGenerator(), configName, this->GeneratorTarget, language);
 
   std::vector<std::string> includes;
-  if (const char* cincludes = source->GetProperty("INCLUDE_DIRECTORIES")) {
+  if (auto cincludes = source->GetProperty("INCLUDE_DIRECTORIES")) {
     LocalCommonGenerator->AppendIncludeDirectories(
-      includes, genexInterpreter.Evaluate(cincludes, "INCLUDE_DIRECTORIES"),
+      includes, genexInterpreter.Evaluate(*cincludes, "INCLUDE_DIRECTORIES"),
       *source);
   }
 
@@ -92,13 +92,13 @@ void cmFastbuildNormalTargetGenerator::DetectCompilerFlags(
   LocalCommonGenerator->AppendFlags(compileFlags, includeFlags);
 
   if (source) {
-    if (const char* cflags = source->GetProperty("COMPILE_FLAGS")) {
+    if (auto cflags = source->GetProperty("COMPILE_FLAGS")) {
       LocalCommonGenerator->AppendFlags(
-        compileFlags, genexInterpreter.Evaluate(cflags, "COMPILE_FLAGS"));
+        compileFlags, genexInterpreter.Evaluate(*cflags, "COMPILE_FLAGS"));
     }
-    if (const char* cflags = source->GetProperty("COMPILE_OPTIONS")) {
+    if (auto cflags = source->GetProperty("COMPILE_OPTIONS")) {
       LocalCommonGenerator->AppendCompileOptions(
-        compileFlags, genexInterpreter.Evaluate(cflags, "COMPILE_OPTIONS"));
+        compileFlags, genexInterpreter.Evaluate(*cflags, "COMPILE_OPTIONS"));
     }
 
     // Add precompile headers compile options.
@@ -428,17 +428,17 @@ std::string cmFastbuildNormalTargetGenerator::ComputeDefines(
     this->GetLocalGenerator(), configName, this->GeneratorTarget, language);
 
   const std::string COMPILE_DEFINITIONS("COMPILE_DEFINITIONS");
-  if (const char* compile_defs = source->GetProperty(COMPILE_DEFINITIONS)) {
+  if (auto compile_defs = source->GetProperty(COMPILE_DEFINITIONS)) {
     this->GetLocalGenerator()->AppendDefines(
-      defines, genexInterpreter.Evaluate(compile_defs, COMPILE_DEFINITIONS));
+      defines, genexInterpreter.Evaluate(*compile_defs, COMPILE_DEFINITIONS));
   }
 
   std::string defPropName = "COMPILE_DEFINITIONS_";
   defPropName += cmSystemTools::UpperCase(configName);
-  if (const char* config_compile_defs = source->GetProperty(defPropName)) {
+  if (auto config_compile_defs = source->GetProperty(defPropName)) {
     this->GetLocalGenerator()->AppendDefines(
       defines,
-      genexInterpreter.Evaluate(config_compile_defs, COMPILE_DEFINITIONS));
+      genexInterpreter.Evaluate(*config_compile_defs, COMPILE_DEFINITIONS));
   }
 
   std::string definesString = this->GetDefines(language, configName);
@@ -659,12 +659,12 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
       this->GeneratorTarget->GetPchSource(configName, language);
     const std::string pchFile =
       this->GeneratorTarget->GetPchFile(this->GetConfigName(), language);
-    const char* pchReuseFrom =
+    auto pchReuseFrom =
       this->GeneratorTarget->GetProperty("PRECOMPILE_HEADERS_REUSE_FROM");
     cmGeneratorTarget* generatorTarget = this->GeneratorTarget;
     if (pchReuseFrom) {
       generatorTarget =
-        this->GetGlobalGenerator()->FindGeneratorTarget(pchReuseFrom);
+        this->GetGlobalGenerator()->FindGeneratorTarget(*pchReuseFrom);
     }
     const std::string pchObject =
       this->GetGlobalGenerator()->ConvertToFastbuildPath(
@@ -724,10 +724,10 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
         (language == "C" || language == "CXX" || language == "Fortran" ||
          language == "CUDA")) {
       std::string const clauncher_prop = language + "_COMPILER_LAUNCHER";
-      const char* clauncher =
+      auto clauncher =
         this->GeneratorTarget->GetProperty(clauncher_prop);
-      if (clauncher && *clauncher) {
-        compilerLauncher = clauncher;
+      if (clauncher) {
+        compilerLauncher = *clauncher;
       }
     }
 
@@ -736,15 +736,14 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
     // Maybe insert an include-what-you-use runner.
     if (!compileCmds.empty() && (language == "C" || language == "CXX")) {
       std::string const iwyu_prop = language + "_INCLUDE_WHAT_YOU_USE";
-      const char* iwyu = this->GeneratorTarget->GetProperty(iwyu_prop);
+      auto iwyu = this->GeneratorTarget->GetProperty(iwyu_prop);
       std::string const tidy_prop = language + "_CLANG_TIDY";
-      const char* tidy = this->GeneratorTarget->GetProperty(tidy_prop);
+      auto tidy = this->GeneratorTarget->GetProperty(tidy_prop);
       std::string const cpplint_prop = language + "_CPPLINT";
-      const char* cpplint = this->GeneratorTarget->GetProperty(cpplint_prop);
+      auto cpplint = this->GeneratorTarget->GetProperty(cpplint_prop);
       std::string const cppcheck_prop = language + "_CPPCHECK";
-      const char* cppcheck = this->GeneratorTarget->GetProperty(cppcheck_prop);
-      if ((iwyu && *iwyu) || (tidy && *tidy) || (cpplint && *cpplint) ||
-          (cppcheck && *cppcheck)) {
+      auto cppcheck = this->GeneratorTarget->GetProperty(cppcheck_prop);
+      if (iwyu || tidy || cpplint || cppcheck) {
         std::string const cmakeCmd =
           this->GetLocalGenerator()->ConvertToOutputFormat(
             cmSystemTools::GetCMakeCommand(), cmLocalGenerator::SHELL);
@@ -760,24 +759,23 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
           compilerId = this->GetGlobalGenerator()->AddLauncher(
             cmSystemTools::GetCMakeCommand(), language, Makefile);
         }
-        if (iwyu && *iwyu) {
+        if (iwyu) {
           run_iwyu += " --iwyu=";
-          run_iwyu += this->GetLocalGenerator()->EscapeForShell(iwyu);
+          run_iwyu += this->GetLocalGenerator()->EscapeForShell(*iwyu);
         }
-        if (tidy && *tidy) {
+        if (tidy) {
           run_iwyu += " --tidy=";
-          run_iwyu += this->GetLocalGenerator()->EscapeForShell(tidy);
+          run_iwyu += this->GetLocalGenerator()->EscapeForShell(*tidy);
         }
-        if (cpplint && *cpplint) {
+        if (cpplint) {
           run_iwyu += " --cpplint=";
-          run_iwyu += this->GetLocalGenerator()->EscapeForShell(cpplint);
+          run_iwyu += this->GetLocalGenerator()->EscapeForShell(*cpplint);
         }
-        if (cppcheck && *cppcheck) {
+        if (cppcheck) {
           run_iwyu += " --cppcheck=";
-          run_iwyu += this->GetLocalGenerator()->EscapeForShell(cppcheck);
+          run_iwyu += this->GetLocalGenerator()->EscapeForShell(*cppcheck);
         }
-        if ((tidy && *tidy) || (cpplint && *cpplint) ||
-            (cppcheck && *cppcheck)) {
+        if (tidy || cpplint || cppcheck) {
           run_iwyu += " --source=" FASTBUILD_DOLLAR_TAG
                       "FB_INPUT_1_PLACEHOLDER" FASTBUILD_DOLLAR_TAG;
         }
@@ -870,17 +868,17 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
         command.flags = baseCompileFlags;
         command.usePCH = usePCH;
 
-        if (const char* objectOutputs =
+        if (auto objectOutputs =
               srcFile->GetProperty("OBJECT_OUTPUTS")) {
-          auto outputs = cmExpandedList(objectOutputs);
+          auto outputs = cmExpandedList(*objectOutputs);
           outputs = GetGlobalGenerator()->ConvertToFastbuildPath(outputs);
           for (const auto& output : outputs)
             commandObjects.extraOutputs.insert(output);
         }
 
-        if (const char* objectDepends =
+        if (auto objectDepends =
               srcFile->GetProperty("OBJECT_DEPENDS")) {
-          auto dependencies = cmExpandedList(objectDepends);
+          auto dependencies = cmExpandedList(*objectDepends);
           dependencies =
             GetGlobalGenerator()->ConvertToFastbuildPath(dependencies);
 
