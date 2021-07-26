@@ -77,6 +77,7 @@
 #    include <cmext/memory>
 
 #    include "cmGlobalBorlandMakefileGenerator.h"
+#    include "cmGlobalFastbuildGenerator.h"
 #    include "cmGlobalJOMMakefileGenerator.h"
 #    include "cmGlobalNMakeMakefileGenerator.h"
 #    include "cmGlobalVisualStudio10Generator.h"
@@ -111,6 +112,7 @@
 #  include "cmExtraEclipseCDT4Generator.h"
 #  include "cmExtraKateGenerator.h"
 #  include "cmExtraSublimeTextGenerator.h"
+#  include "cmGlobalFastbuildGenerator.h"
 #endif
 
 #if defined(__linux__) || defined(_WIN32)
@@ -2441,6 +2443,7 @@ void cmake::AddDefaultGenerators()
 #ifdef CMAKE_USE_XCODE
   this->Generators.push_back(cmGlobalXCodeGenerator::NewFactory());
 #endif
+  this->Generators.push_back(cmGlobalFastbuildGenerator::NewFactory());
 }
 
 bool cmake::ParseCacheEntry(const std::string& entry, std::string& var,

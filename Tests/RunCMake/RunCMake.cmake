@@ -1,3 +1,5 @@
+set(CMAKE_EXECUTE_PROCESS_COMMAND_ECHO STDOUT)
+
 foreach(arg
     RunCMake_GENERATOR
     RunCMake_SOURCE_DIR

@@ -44,7 +44,7 @@ run_cmake(WARN-cond)
 run_cmake(WARN-cond-test)
 run_cmake(WARN-cond-package)
 
-if(RunCMake_GENERATOR MATCHES "Make|Ninja")
+if(RunCMake_GENERATOR MATCHES "Make|Ninja|Fastbuild")
   run_cmake(NEW-cond-package_source)
   run_cmake(OLD-cond-package_source)
   run_cmake(WARN-cond-package_source)
