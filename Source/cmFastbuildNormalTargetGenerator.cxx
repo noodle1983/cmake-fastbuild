@@ -273,11 +273,11 @@ bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
   cmGeneratorTarget::ModuleDefinitionInfo const* mdi =
     this->GeneratorTarget->GetModuleDefinitionInfo(configName);
   if (mdi && !mdi->DefFile.empty()) {
-    const char* defFileFlag =
+    auto const* const defFileFlag =
       LocalCommonGenerator->GetMakefile()->GetDefinition(
         "CMAKE_LINK_DEF_FILE_FLAG");
     if (defFileFlag) {
-      linkFlags += defFileFlag +
+      linkFlags += *defFileFlag +
         this->LocalCommonGenerator->ConvertToOutputFormat(
           linkLineComputer->ConvertToLinkReference(mdi->DefFile),
           cmOutputConverter::SHELL);
@@ -331,10 +331,10 @@ bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
   vars.LanguageCompileFlags = "";
   // Rule for linking library/executable.
   std::string launcher;
-  const char* val = LocalCommonGenerator->GetRuleLauncher(
+  auto const* const val = LocalCommonGenerator->GetRuleLauncher(
     this->GeneratorTarget, "RULE_LAUNCH_LINK");
-  if (val && *val) {
-    launcher = val;
+  if (val && !val->empty()) {
+    launcher = *val;
     launcher += " ";
   }
 
@@ -365,16 +365,16 @@ void cmFastbuildNormalTargetGenerator::ComputeLinkCmds(
   {
     std::string linkCmdVar =
       GeneratorTarget->GetCreateRuleVariable(linkLanguage, configName);
-    const char* linkCmd = Makefile->GetDefinition(linkCmdVar);
+    auto const* const linkCmd = Makefile->GetDefinition(linkCmdVar);
     if (linkCmd) {
-      std::string linkCmdStr = linkCmd;
+      std::string linkCmdStr = *linkCmd;
       if (this->GetGeneratorTarget()->HasImplibGNUtoMS(configName)) {
         std::string ruleVar = "CMAKE_";
         ruleVar +=
           this->GeneratorTarget->GetLinkerLanguage(this->GetConfigName());
         ruleVar += "_GNUtoMS_RULE";
-        if (const char* rule = this->Makefile->GetDefinition(ruleVar)) {
-          linkCmdStr += rule;
+        if (auto const* const rule = this->Makefile->GetDefinition(ruleVar)) {
+          linkCmdStr += *rule;
         }
       }
       cmExpandList(linkCmdStr, linkCmds);
@@ -934,10 +934,10 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
         } else {
           std::string outputExtensionVar = std::string("CMAKE_") + language +
             std::string("_OUTPUT_EXTENSION");
-          const char* outputExtension =
+          auto const* const outputExtension =
             Makefile->GetDefinition(outputExtensionVar);
 
-          objectListNode.CompilerOutputExtension = outputExtension;
+          objectListNode.CompilerOutputExtension = *outputExtension;
         }
 
         objectsByName[objectListNode.Name] = objectListNode;

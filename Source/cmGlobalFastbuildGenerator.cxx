@@ -68,8 +68,8 @@ bool cmGlobalFastbuildGenerator::FindMakeProgram(cmMakefile* mf)
   if (!cmGlobalGenerator::FindMakeProgram(mf)) {
     return false;
   }
-  if (const char* fastbuildCommand = mf->GetDefinition("CMAKE_MAKE_PROGRAM")) {
-    this->FastbuildCommand = fastbuildCommand;
+  if (auto const* const fastbuildCommand = mf->GetDefinition("CMAKE_MAKE_PROGRAM")) {
+    this->FastbuildCommand = *fastbuildCommand;
     std::vector<std::string> command;
     command.push_back(this->FastbuildCommand);
     command.emplace_back("-version");
