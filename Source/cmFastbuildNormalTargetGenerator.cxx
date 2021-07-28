@@ -15,8 +15,6 @@
 #include "cmState.h"
 #include "cmStateDirectory.h"
 
-#define FASTBUILD_DOLLAR_TAG "FASTBUILD_DOLLAR_TAG"
-
 namespace {
 struct Objects
 {
@@ -67,7 +65,7 @@ void cmFastbuildNormalTargetGenerator::DetectCompilerFlags(
   const auto& configName = GetConfigName();
 
   LocalCommonGenerator->GetTargetCompileFlags(
-    this->GeneratorTarget, configName, language, compileFlags);
+    this->GeneratorTarget, configName, language, compileFlags, "");
 
   cmGeneratorExpressionInterpreter genexInterpreter(
     this->GetLocalGenerator(), configName, this->GeneratorTarget, language);

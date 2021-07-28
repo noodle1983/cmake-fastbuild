@@ -43,8 +43,6 @@ const char* cmGlobalFastbuildGenerator::FASTBUILD_BUILD_FILE = "fbuild.bff";
 
 const char* cmGlobalFastbuildGenerator::INDENT = "  ";
 
-#define FASTBUILD_DOLLAR_TAG "FASTBUILD_DOLLAR_TAG"
-
 cmGlobalFastbuildGenerator::cmGlobalFastbuildGenerator(cmake* cm)
   : cmGlobalCommonGenerator(cm)
   , BuildFileStream(nullptr)
@@ -358,23 +356,27 @@ struct WrapHelper
 {
   std::string m_prefix;
   std::string m_suffix;
+  bool escape_dollar;
 
   std::string operator()(const std::string& in)
   {
     std::string result = m_prefix + in + m_suffix;
-    cmSystemTools::ReplaceString(result, "$", "^$");
-    cmSystemTools::ReplaceString(result, FASTBUILD_DOLLAR_TAG, "$");
+    if (escape_dollar)
+    {
+        cmSystemTools::ReplaceString(result, "$", "^$");
+        cmSystemTools::ReplaceString(result, FASTBUILD_DOLLAR_TAG, "$");
+    }
     return result;
   }
 };
 
 std::vector<std::string> cmGlobalFastbuildGenerator::Wrap(
   const std::vector<std::string>& in, const std::string& prefix,
-  const std::string& suffix)
+  const std::string& suffix, const bool escape_dollar)
 {
   std::vector<std::string> result;
 
-  WrapHelper helper = { prefix, suffix };
+  WrapHelper helper = { prefix, suffix, escape_dollar };
 
   std::transform(in.begin(), in.end(), std::back_inserter(result), helper);
 
@@ -383,11 +385,11 @@ std::vector<std::string> cmGlobalFastbuildGenerator::Wrap(
 
 std::vector<std::string> cmGlobalFastbuildGenerator::Wrap(
     const std::set<std::string>& in, const std::string& prefix,
-    const std::string& suffix)
+    const std::string& suffix, const bool escape_dollar)
 {
     std::vector<std::string> result;
 
-    WrapHelper helper = { prefix, suffix };
+    WrapHelper helper = { prefix, suffix, escape_dollar };
 
     std::transform(in.begin(), in.end(), std::back_inserter(result), helper);
 
@@ -468,12 +470,16 @@ void cmGlobalFastbuildGenerator::WriteCompilers(std::ostream& os)
     }
 
     // Strip out the path to the compiler
-    std::string compilerPath = compilerDef.path;
-    cmSystemTools::ConvertToOutputSlashes(compilerPath);
+    std::string compilerPath = compilerDef.executable;
+    //cmSystemTools::ConvertToOutputSlashes(compilerPath);
 
     // Write out the compiler that has been configured
     WriteCommand(os, "Compiler", Quote(compilerDef.name));
     os << "{\n";
+    for (auto const& [key, value] : compilerDef.extraVariables)
+    {
+        WriteVariable(os, key, Quote(value), 1);
+    }
     WriteVariable(os, "Executable", Quote(compilerPath), 1);
     WriteVariable(os, "CompilerFamily", Quote(fastbuildFamily), 1);
     if (compilerDef.useLightCache) {
@@ -482,7 +488,9 @@ void cmGlobalFastbuildGenerator::WriteCompilers(std::ostream& os)
     if (fastbuildFamily == "clang")
       WriteVariable(os, "ClangRewriteIncludes", "false", 1);
     if (!compilerDef.extraFiles.empty())
-        WriteArray(os, "ExtraFiles", Wrap(compilerDef.extraFiles), 1);
+        // Do not escape '$' sign, CMAKE_${LANG}_FASTBUILD_EXTRA_FILES might contain FB variables to be expanded (we do use some internaly).
+        // Besides a path cannot contain a '$'
+        WriteArray(os, "ExtraFiles", Wrap(compilerDef.extraFiles, "'", "'", false), 1);
     os << "}\n";
 
     auto compilerId = compilerDef.name;
@@ -510,8 +518,9 @@ void cmGlobalFastbuildGenerator::AddCompiler(const std::string& language,
 
   // Add the language to the compiler's name
   FastbuildCompiler compilerDef;
+  compilerDef.extraVariables.push_back({"Root", cmSystemTools::GetFilenamePath(compilerLocation) });
   compilerDef.name = "Compiler";
-  compilerDef.path = compilerLocation;
+  compilerDef.executable = "$Root$/" + cmSystemTools::GetFilenameName(compilerLocation);
   compilerDef.cmakeCompilerID =
     mf->GetSafeDefinition("CMAKE_" + language + "_COMPILER_ID");
 
@@ -528,6 +537,56 @@ void cmGlobalFastbuildGenerator::AddCompiler(const std::string& language,
   }
   compilerDef.extraFiles = cmExpandedList(mf->GetSafeDefinition("CMAKE_" + language + "_FASTBUILD_EXTRA_FILES"));
 
+  // Automatically add extra files based on compiler (see https://fastbuild.org/docs/functions/compiler.html)
+  if (language == "C" || language == "CXX")
+  {
+      if (compilerDef.cmakeCompilerID == "MSVC")
+      {
+          // https://cmake.org/cmake/help/latest/variable/MSVC_VERSION.html
+
+          // Visual Studio 17 (19.30 to 19.39)
+          // TODO
+
+          // Visual Studio 16 (19.20 to 19.29)
+          if (cmSystemTools::VersionCompare(cmSystemTools::OP_GREATER_EQUAL, compilerDef.cmakeCompilerVersion.c_str(), "19.20"))
+          {
+              compilerDef.extraFiles.push_back("$Root$/c1.dll");
+              compilerDef.extraFiles.push_back("$Root$/c1xx.dll");
+              compilerDef.extraFiles.push_back("$Root$/c2.dll");
+              compilerDef.extraFiles.push_back("$Root$/atlprov.dll"); // Only needed if using ATL
+              compilerDef.extraFiles.push_back("$Root$/msobj140.dll");
+              compilerDef.extraFiles.push_back("$Root$/mspdb140.dll");
+              compilerDef.extraFiles.push_back("$Root$/mspdbcore.dll");
+              compilerDef.extraFiles.push_back("$Root$/mspdbsrv.exe");
+              compilerDef.extraFiles.push_back("$Root$/mspft140.dll");
+              compilerDef.extraFiles.push_back("$Root$/msvcp140.dll");
+              compilerDef.extraFiles.push_back("$Root$/msvcp140_atomic_wait.dll"); // Required circa 16.8.3 (14.28.29333)
+              compilerDef.extraFiles.push_back("$Root$/tbbmalloc.dll"); // Required as of 16.2 (14.22.27905)
+              compilerDef.extraFiles.push_back("$Root$/vcruntime140.dll");
+              compilerDef.extraFiles.push_back("$Root$/vcruntime140_1.dll"); // Required as of 16.5.1 (14.25.28610)
+              compilerDef.extraFiles.push_back("$Root$/1033/clui.dll");
+              compilerDef.extraFiles.push_back("$Root$/1033/mspft140ui.dll"); // Localized messages for static analysis
+          }
+          // Visual Studio 15 (19.10 to 19.19)
+          else if (cmSystemTools::VersionCompare(cmSystemTools::OP_GREATER_EQUAL, compilerDef.cmakeCompilerVersion.c_str(), "19.10"))
+          {
+              compilerDef.extraFiles.push_back("$Root$/c1.dll");
+              compilerDef.extraFiles.push_back("$Root$/c1xx.dll");
+              compilerDef.extraFiles.push_back("$Root$/c2.dll");
+              compilerDef.extraFiles.push_back("$Root$/atlprov.dll"); // Only needed if using ATL
+              compilerDef.extraFiles.push_back("$Root$/msobj140.dll");
+              compilerDef.extraFiles.push_back("$Root$/mspdb140.dll");
+              compilerDef.extraFiles.push_back("$Root$/mspdbcore.dll");
+              compilerDef.extraFiles.push_back("$Root$/mspdbsrv.exe");
+              compilerDef.extraFiles.push_back("$Root$/mspft140.dll");
+              compilerDef.extraFiles.push_back("$Root$/msvcp140.dll");
+              compilerDef.extraFiles.push_back("$Root$/vcruntime140.dll");
+              compilerDef.extraFiles.push_back("$Root$/1033/clui.dll");
+          }
+      }
+      // TODO: Handle Intel compiler
+  }
+
   this->Compilers[language] = compilerDef;
 }
 
@@ -537,7 +596,7 @@ std::string cmGlobalFastbuildGenerator::AddLauncher(
   // Add the language to the compiler's name
   FastbuildCompiler compilerDef;
   compilerDef.name = "Launcher";
-  compilerDef.path = launcher;
+  compilerDef.executable = launcher;
   compilerDef.cmakeCompilerID =
     mf->GetSafeDefinition("CMAKE_" + language + "_COMPILER_ID");
   compilerDef.cmakeCompilerVersion =

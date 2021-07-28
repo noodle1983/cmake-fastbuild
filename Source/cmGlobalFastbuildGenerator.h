@@ -17,6 +17,10 @@
 #include "cmGlobalCommonGenerator.h"
 #include "cmStateTypes.h"
 
+#include <utility>
+
+#define FASTBUILD_DOLLAR_TAG "FASTBUILD_DOLLAR_TAG"
+
 class cmGlobalGeneratorFactory;
 class cmFastbuildTargetGenerator;
 class cmGeneratedFileStream;
@@ -124,11 +128,13 @@ public:
 
   static std::vector<std::string> Wrap(const std::vector<std::string>& in,
                                        const std::string& prefix = "'",
-                                       const std::string& suffix = "'");
+                                       const std::string& suffix = "'",
+                                       const bool escape_dollar = true);
 
   static std::vector<std::string> Wrap(const std::set<std::string>& in,
                                        const std::string& prefix = "'",
-                                       const std::string& suffix = "'");
+                                       const std::string& suffix = "'",
+                                       const bool escape_dollar = true);
 
   static void WriteDivider(std::ostream& os);
   static void WriteComment(std::ostream& os, const std::string& comment,
@@ -210,8 +216,9 @@ public:
 
   struct FastbuildCompiler
   {
+    std::vector<std::pair<std::string, std::string>> extraVariables;
     std::string name;
-    std::string path;
+    std::string executable;
     std::string cmakeCompilerID;
     std::string cmakeCompilerVersion;
     std::string language;
