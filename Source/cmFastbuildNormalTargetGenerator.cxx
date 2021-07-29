@@ -1156,7 +1156,7 @@ void cmFastbuildNormalTargetGenerator::Generate()
   }
 
   const std::string objPath = GetGeneratorTarget()->GetSupportDirectory();
-  fastbuildTarget.Variables["TargetOutDir"] = ConvertToFastbuildPath(objPath);
+  fastbuildTarget.Variables["TargetOutDir"] = "\"" + ConvertToFastbuildPath(objPath) + "\"";
 
   if (GeneratorTarget->GetType() == cmStateEnums::EXECUTABLE ||
       GeneratorTarget->GetType() == cmStateEnums::STATIC_LIBRARY ||
@@ -1165,8 +1165,8 @@ void cmFastbuildNormalTargetGenerator::Generate()
     std::string targetOutPDBPath =
       GeneratorTarget->GetPDBDirectory(configName) + "/" +
       GeneratorTarget->GetPDBName(configName);
-    fastbuildTarget.Variables["TargetOutPDBPath"] =
-      ConvertToFastbuildPath(targetOutPDBPath);
+    fastbuildTarget.Variables["TargetOutPDBPath"] = "\"" +
+      ConvertToFastbuildPath(targetOutPDBPath) + "\"";
   }
   if (GeneratorTarget->GetType() <= cmStateEnums::OBJECT_LIBRARY) {
     std::string targetOutCompilePDBPath =
@@ -1177,12 +1177,12 @@ void cmFastbuildNormalTargetGenerator::Generate()
     }
     targetOutCompilePDBPath =
       Makefile->GetHomeOutputDirectory() + "/" + targetOutCompilePDBPath;
-    fastbuildTarget.Variables["TargetOutCompilePDBPath"] =
-      ConvertToFastbuildPath(targetOutCompilePDBPath);
+    fastbuildTarget.Variables["TargetOutCompilePDBPath"] = "\"" +
+      ConvertToFastbuildPath(targetOutCompilePDBPath) + "\"";
   }
-  fastbuildTarget.Variables["TargetOutputImplib"] =
+  fastbuildTarget.Variables["TargetOutputImplib"] = "\"" +
     ConvertToFastbuildPath(GeneratorTarget->GetFullPath(
-      configName, cmStateEnums::ImportLibraryArtifact));
+      configName, cmStateEnums::ImportLibraryArtifact)) + "\"";
 
   fastbuildTarget.PreBuildExecNodes = GenerateCommands("PreBuild");
   fastbuildTarget.PreLinkExecNodes = GenerateCommands("PreLink");
