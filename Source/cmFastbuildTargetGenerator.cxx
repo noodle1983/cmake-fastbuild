@@ -224,21 +224,20 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
     for (cmSourceFile const* source : customCommands) {
       cmCustomCommandGenerator ccg(*source->GetCustomCommand(), configName,
                                    LocalCommonGenerator);
-      std::string workingDirectory = ccg.GetWorkingDirectory();
-      if (workingDirectory.empty()) {
-        workingDirectory = Makefile->GetCurrentBinaryDirectory();
-        workingDirectory += "/";
-      }
       for (const std::string& dep : ccg.GetDepends()) {
+        auto const& depFilePath =
+          GetMakefile()
+            ->GetSource(dep, cmSourceFileLocationKind::Known)
+            ->GetFullPath();
+        // If this dependency comes from a custom command, add that command to
+        // the dependencies list
         auto command =
           std::find_if(customCommands.begin(), customCommands.end(),
-                       [&dep, &workingDirectory](cmSourceFile const* source) {
+                       [&depFilePath](cmSourceFile const* source) {
                          const std::vector<std::string>& outputs =
                            source->GetCustomCommand()->GetOutputs();
                          return std::find(outputs.begin(), outputs.end(),
-                                          dep) != outputs.end() ||
-                           std::find(outputs.begin(), outputs.end(),
-                                     workingDirectory + dep) != outputs.end();
+                                          depFilePath) != outputs.end();
                        });
 
         if (command != customCommands.end()) {
@@ -288,7 +287,7 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
     if (ccg.GetNumberOfCommands() > 0) {
       std::string wd = ccg.GetWorkingDirectory();
       if (wd.empty()) {
-        wd = this->LocalGenerator->GetCurrentBinaryDirectory();
+        wd = this->LocalGenerator->GetCurrentSourceDirectory();
       }
 
       std::ostringstream cdCmd;
@@ -318,7 +317,7 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
         output = outputs[0];
         if (ccg.GetWorkingDirectory().empty()) {
           output = this->LocalGenerator->MaybeConvertToRelativePath(
-            this->LocalGenerator->GetCurrentBinaryDirectory(), output);
+            this->LocalGenerator->GetCurrentSourceDirectory(), output);
         }
         output = this->LocalGenerator->ConvertToOutputFormat(
           output, cmOutputConverter::SHELL);
@@ -451,14 +450,18 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
       execNode.PreBuildDependencies.insert(nodes.back().Name);
 
     for (const std::string& dep : ccg.GetDepends()) {
+      auto const& depFilePath =
+        GetMakefile()
+          ->GetSource(dep, cmSourceFileLocationKind::Known)
+          ->GetFullPath();
+      // If this dependency comes from a custom command, add that command to
+      // the dependencies list
       auto command = std::find_if(
         commands.begin(), commands.end(),
-        [&dep, &workingDirectory](cmCustomCommand const& cc) {
+        [&depFilePath](cmCustomCommand const& cc) {
           const std::vector<std::string>& outputs = cc.GetOutputs();
-          return std::find(outputs.begin(), outputs.end(), dep) !=
-            outputs.end() ||
-            std::find(outputs.begin(), outputs.end(),
-                      workingDirectory + "/" + dep) != outputs.end();
+          return std::find(outputs.begin(), outputs.end(), depFilePath) !=
+            outputs.end();
         });
 
       if (command != commands.end()) {
