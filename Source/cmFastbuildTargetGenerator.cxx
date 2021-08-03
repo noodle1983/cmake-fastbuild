@@ -225,23 +225,33 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
       cmCustomCommandGenerator ccg(*source->GetCustomCommand(), configName,
                                    LocalCommonGenerator);
       for (const std::string& dep : ccg.GetDepends()) {
-        auto const& depFilePath =
-          GetMakefile()
-            ->GetSource(dep, cmSourceFileLocationKind::Known)
-            ->GetFullPath();
+        // Check if we know how to generate this file.
+        cmSourcesWithOutput sources =
+          this->LocalGenerator->GetSourcesWithOutput(dep);
+        // If we failed to find a target or source and we have a relative path,
+        // it might be a valid source if made relative to the current binary
+        // directory.
+        if (!sources.Target && !sources.Source &&
+            !cmSystemTools::FileIsFullPath(dep)) {
+          auto fullname =
+            cmStrCat(this->Makefile->GetCurrentBinaryDirectory(), '/', dep);
+          fullname = cmSystemTools::CollapseFullPath(
+            fullname, this->Makefile->GetHomeOutputDirectory());
+          sources = this->LocalGenerator->GetSourcesWithOutput(fullname);
+        }
+
         // If this dependency comes from a custom command, add that command to
         // the dependencies list
-        auto command =
-          std::find_if(customCommands.begin(), customCommands.end(),
-                       [&depFilePath](cmSourceFile const* source) {
-                         const std::vector<std::string>& outputs =
-                           source->GetCustomCommand()->GetOutputs();
-                         return std::find(outputs.begin(), outputs.end(),
-                                          depFilePath) != outputs.end();
-                       });
-
-        if (command != customCommands.end()) {
-          dependencies.emplace(source, *command);
+        if (sources.Source) {
+          auto command =
+            std::find_if(customCommands.begin(), customCommands.end(),
+                         [src = sources.Source](cmSourceFile const* source) {
+                           return src == source;
+                         });
+          // Found and not self
+          if (command != customCommands.end() && source != *command) {
+            dependencies.emplace(source, *command);
+          }
         }
       }
     }
@@ -352,19 +362,19 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
 
     std::vector<std::string> outputs;
     for (std::string const& output : ccg.GetOutputs()) {
-        if (cmSourceFile* sf = this->Makefile->GetSource(output)) {
-            if (!sf->GetPropertyAsBool("SYMBOLIC")) {
-                outputs.push_back(output);
-            }
+      if (cmSourceFile* sf = this->Makefile->GetSource(output)) {
+        if (!sf->GetPropertyAsBool("SYMBOLIC")) {
+          outputs.push_back(output);
         }
+      }
     }
     execNode.ExecAlways = inputs.empty();
     for (std::string const& output : cc.GetByproducts()) {
-        if (cmSourceFile* sf = this->Makefile->GetSource(output)) {
-            if (!sf->GetPropertyAsBool("SYMBOLIC")) {
-                outputs.push_back(output);
-            }
+      if (cmSourceFile* sf = this->Makefile->GetSource(output)) {
+        if (!sf->GetPropertyAsBool("SYMBOLIC")) {
+          outputs.push_back(output);
         }
+      }
     }
 
     if (!execNode.IsNoop) {
@@ -397,8 +407,8 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
           LocalCommonGenerator->GetMakefile()->GetHomeOutputDirectory();
         output = outputDir + "/dummy-out-" + targetName + ".txt";
         std::string cmakeCommand =
-            this->GetLocalGenerator()->ConvertToOutputFormat(
-                cmSystemTools::GetCMakeCommand(), cmOutputConverter::SHELL);
+          this->GetLocalGenerator()->ConvertToOutputFormat(
+            cmSystemTools::GetCMakeCommand(), cmOutputConverter::SHELL);
         cmdLines.push_back(cmakeCommand + " -E touch " + output);
       }
       execNode.ExecOutput = ConvertToFastbuildPath(output);
@@ -450,10 +460,11 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
       execNode.PreBuildDependencies.insert(nodes.back().Name);
 
     for (const std::string& dep : ccg.GetDepends()) {
-      auto const& depFilePath =
-        GetMakefile()
-          ->GetSource(dep, cmSourceFileLocationKind::Known)
-          ->GetFullPath();
+      auto depFilePath = dep;
+      if (!cmSystemTools::FileIsFullPath(depFilePath)) {
+        depFilePath = cmSystemTools::CollapseFullPath(
+          cmStrCat(this->Makefile->GetCurrentSourceDirectory(), '/', dep));
+      }
       // If this dependency comes from a custom command, add that command to
       // the dependencies list
       auto command = std::find_if(
@@ -473,21 +484,21 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
     nodes.push_back(execNode);
 
     if (outputs.size() > 1) {
-        for (const auto& output : outputs) {
-            cmGlobalFastbuildGenerator::FastbuildExecNode noop;
-            noop.Name = execNode.Name;
-            cmCryptoHash hash(cmCryptoHash::AlgoSHA256);
-            noop.Name += "-" + hash.HashString(output).substr(0, 7);
-            noop.PreBuildDependencies.insert(execNode.Name);
-            noop.ExecInput.push_back(execNode.ExecOutput);
-            noop.ExecOutput = ConvertToFastbuildPath(output);
-            std::string cmakeCommand =
-                this->GetLocalGenerator()->ConvertToOutputFormat(
-                    cmSystemTools::GetCMakeCommand(), cmOutputConverter::SHELL);
-            noop.ExecExecutable = cmakeCommand;
-            noop.ExecArguments = " -E touch " + output;
-            noop.ExecWorkingDir = execNode.ExecWorkingDir;
-        }
+      for (const auto& output : outputs) {
+        cmGlobalFastbuildGenerator::FastbuildExecNode noop;
+        noop.Name = execNode.Name;
+        cmCryptoHash hash(cmCryptoHash::AlgoSHA256);
+        noop.Name += "-" + hash.HashString(output).substr(0, 7);
+        noop.PreBuildDependencies.insert(execNode.Name);
+        noop.ExecInput.push_back(execNode.ExecOutput);
+        noop.ExecOutput = ConvertToFastbuildPath(output);
+        std::string cmakeCommand =
+          this->GetLocalGenerator()->ConvertToOutputFormat(
+            cmSystemTools::GetCMakeCommand(), cmOutputConverter::SHELL);
+        noop.ExecExecutable = cmakeCommand;
+        noop.ExecArguments = " -E touch " + output;
+        noop.ExecWorkingDir = execNode.ExecWorkingDir;
+      }
     }
   }
 
