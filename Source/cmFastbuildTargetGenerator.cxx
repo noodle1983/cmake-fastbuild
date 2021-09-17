@@ -287,17 +287,11 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
       inputs.push_back(realDep);
     }
 
-    std::string workingDirectory = ccg.GetWorkingDirectory();
-    if (workingDirectory.empty()) {
-      workingDirectory =
-        this->LocalCommonGenerator->GetCurrentBinaryDirectory();
-    }
-
     std::vector<std::string> cmdLines;
     if (ccg.GetNumberOfCommands() > 0) {
       std::string wd = ccg.GetWorkingDirectory();
       if (wd.empty()) {
-        wd = this->LocalGenerator->GetCurrentSourceDirectory();
+        wd = this->LocalGenerator->GetCurrentBinaryDirectory();
       }
 
       std::ostringstream cdCmd;
@@ -327,7 +321,7 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
         output = outputs[0];
         if (ccg.GetWorkingDirectory().empty()) {
           output = this->LocalGenerator->MaybeConvertToRelativePath(
-            this->LocalGenerator->GetCurrentSourceDirectory(), output);
+            this->LocalGenerator->GetCurrentBinaryDirectory(), output);
         }
         output = this->LocalGenerator->ConvertToOutputFormat(
           output, cmOutputConverter::SHELL);
@@ -445,6 +439,11 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
 #else
       execNode.ExecExecutable = ConvertToFastbuildPath(scriptFileName);
 #endif
+      std::string workingDirectory = ccg.GetWorkingDirectory();
+      if (workingDirectory.empty()) {
+          workingDirectory =
+              this->LocalCommonGenerator->GetCurrentBinaryDirectory();
+      }
       if (!workingDirectory.empty()) {
         execNode.ExecWorkingDir = workingDirectory;
       }
