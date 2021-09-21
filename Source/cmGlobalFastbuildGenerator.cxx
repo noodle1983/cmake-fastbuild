@@ -12,6 +12,7 @@
 
 #include "cmGlobalFastbuildGenerator.h"
 
+#include <algorithm>
 #include <future>
 
 #ifdef _WIN32
@@ -653,19 +654,32 @@ std::set<std::string> cmGlobalFastbuildGenerator::WriteExecs(
   for (const auto& Exec : Execs) {
     output.insert(Exec.Name);
 
-    auto preBuildDependencies = Exec.PreBuildDependencies;
-    preBuildDependencies.insert(dependencies.begin(), dependencies.end());
+    auto execInput = Exec.ExecInput;
+    for (auto const& dep : dependencies) {
+      if (std::find(execInput.begin(), execInput.end(), dep) ==
+          execInput.end()) {
+        execInput.push_back(dep);
+      }
+    }
 
     if (Exec.IsNoop) {
+      auto preBuildDependencies = Exec.PreBuildDependencies;
+      preBuildDependencies.insert(dependencies.begin(), dependencies.end());
+      // When this assert will trigger it means Noop is now using ExecInput
+      // instead of PreBuildDependencies and we need to replace the variable
+      // passed to WriteAlias with execInput.
+      assert(!preBuildDependencies.empty() &&
+             "Need to use ExecInput like non-Noop Exec");
       WriteAlias(Exec.Name, preBuildDependencies);
     } else {
       WriteCommand(*BuildFileStream, "Exec", Quote(Exec.Name), 1);
       Indent(*BuildFileStream, 1);
       *BuildFileStream << "{\n";
       {
-        if (!preBuildDependencies.empty())
+        if (!Exec.PreBuildDependencies.empty()) {
           WriteArray(*BuildFileStream, "PreBuildDependencies",
-                     Wrap(preBuildDependencies), 2);
+                     Wrap(Exec.PreBuildDependencies), 2);
+        }
         WriteVariable(*BuildFileStream, "ExecExecutable",
                       Quote(Exec.ExecExecutable), 2);
         if (!Exec.ExecArguments.empty()) {
@@ -676,8 +690,8 @@ std::set<std::string> cmGlobalFastbuildGenerator::WriteExecs(
           WriteVariable(*BuildFileStream, "ExecWorkingDir",
                         Quote(Exec.ExecWorkingDir), 2);
         }
-        if (!Exec.ExecInput.empty()) {
-          WriteArray(*BuildFileStream, "ExecInput", Wrap(Exec.ExecInput), 2);
+        if (!execInput.empty()) {
+          WriteArray(*BuildFileStream, "ExecInput", Wrap(execInput), 2);
         }
         if (Exec.ExecUseStdOutAsOutput) {
           WriteVariable(*BuildFileStream, "ExecUseStdOutAsOutput", "true", 2);
@@ -685,8 +699,9 @@ std::set<std::string> cmGlobalFastbuildGenerator::WriteExecs(
         WriteVariable(*BuildFileStream, "ExecAlwaysShowOutput", "true", 2);
         WriteVariable(*BuildFileStream, "ExecOutput", Quote(Exec.ExecOutput),
                       2);
-        if (Exec.ExecAlways)
+        if (Exec.ExecAlways) {
           WriteVariable(*BuildFileStream, "ExecAlways", "true", 2);
+        }
       }
       Indent(*BuildFileStream, 1);
       *BuildFileStream << "}\n";
