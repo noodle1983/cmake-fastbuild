@@ -404,6 +404,8 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
           this->GetLocalGenerator()->ConvertToOutputFormat(
             cmSystemTools::GetCMakeCommand(), cmOutputConverter::SHELL);
         cmdLines.push_back(cmakeCommand + " -E touch " + output);
+        // Forward command output to the file
+        execNode.ExecUseStdOutAsOutput = true;
       }
       execNode.ExecOutput = ConvertToFastbuildPath(output);
 
