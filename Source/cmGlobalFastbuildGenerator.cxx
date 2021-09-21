@@ -1184,10 +1184,11 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
             cmSystemTools::ReplaceString(folderId, ".", "_");
 
             std::stringstream ss;
-            WriteVariable(ss, "Folder", Quote(folder), 2);
-            WriteArray(ss, "Files", Wrap(files), 2);
-            WriteVariable(*BuildFileStream, folderId, "[\n" + ss.str() + "]",
-                          1);
+            WriteVariable(ss, "Folder", Quote(folder), 3);
+            WriteArray(ss, "Files", Wrap(files), 3);
+            Indent(ss, 2);
+            ss << "]";
+            WriteVariable(*BuildFileStream, folderId, "[\n" + ss.str(), 2);
 
             ProjectFilesWithFolders.push_back("." + folderId);
           }
@@ -1203,8 +1204,9 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
           WriteVariable(ss, "Condition",
                         Quote("Exists('" + VCXProject.UserProps + "')"), 3);
           WriteVariable(ss, "Project", Quote(VCXProject.UserProps), 3);
-          WriteVariable(*BuildFileStream, "UserProps", "[\n" + ss.str() + "]",
-                        2);
+          Indent(ss, 2);
+          ss << "]";
+          WriteVariable(*BuildFileStream, "UserProps", "[\n" + ss.str(), 2);
           WriteArray(*BuildFileStream, "ProjectProjectImports",
                      { ".UserProps" }, 2);
         }
@@ -1224,8 +1226,9 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
                       Quote(VCXProject.ProjectBuildCommand), 3);
         WriteVariable(ss, "ProjectRebuildCommand",
                       Quote(VCXProject.ProjectRebuildCommand), 3);
-        WriteVariable(*BuildFileStream, "ProjectConfigs",
-                      "[\n" + ss.str() + "]", 2);
+        Indent(ss, 2);
+        ss << "]";
+        WriteVariable(*BuildFileStream, "ProjectConfigs", "[\n" + ss.str(), 2);
       }
       Indent(*BuildFileStream, 1);
       *BuildFileStream << "}\n";
@@ -1266,8 +1269,9 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
     std::stringstream ss;
     WriteVariable(ss, "Platform", Quote(VSPlatform), 2);
     WriteVariable(ss, "Config", Quote(VSConfig), 2);
-    WriteVariable(*BuildFileStream, "SolutionConfig", "[\n" + ss.str() + "]",
-                  1);
+    Indent(ss, 1);
+    ss << "]";
+    WriteVariable(*BuildFileStream, "SolutionConfig", "[\n" + ss.str(), 1);
     WriteArray(*BuildFileStream, "SolutionConfigs", { ".SolutionConfig" }, 1);
     std::vector<std::string> SolutionFolders;
     for (const auto& [folder, projects] : VSProjects) {
@@ -1282,7 +1286,9 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
       std::stringstream ss;
       WriteVariable(ss, "Path", Quote(folder), 2);
       WriteArray(ss, "Projects", Wrap(projects), 2);
-      WriteVariable(*BuildFileStream, folderId, "[\n" + ss.str() + "]", 1);
+      Indent(ss, 1);
+      ss << "]";
+      WriteVariable(*BuildFileStream, folderId, "[\n" + ss.str(), 1);
 
       SolutionFolders.push_back("." + folderId);
     }
@@ -1298,7 +1304,9 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
       std::stringstream ss;
       WriteArray(ss, "Projects", Wrap(std::vector<std::string>{ project }), 2);
       WriteArray(ss, "Dependencies", Wrap(dependencies), 2);
-      WriteVariable(*BuildFileStream, depsId, "[\n" + ss.str() + "]", 1);
+      Indent(ss, 1);
+      ss << "]";
+      WriteVariable(*BuildFileStream, depsId, "[\n" + ss.str(), 1);
 
       SolutionDependencies.push_back("." + depsId);
     }
