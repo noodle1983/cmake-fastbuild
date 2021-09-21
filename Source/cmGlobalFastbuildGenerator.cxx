@@ -15,10 +15,10 @@
 #include <future>
 
 #ifdef _WIN32
-#include <windows.h>
+#  include <windows.h>
 
-#include <objbase.h>
-#include <shellapi.h>
+#  include <objbase.h>
+#  include <shellapi.h>
 #endif
 
 #include "cmComputeLinkInformation.h"
@@ -66,7 +66,8 @@ bool cmGlobalFastbuildGenerator::FindMakeProgram(cmMakefile* mf)
   if (!cmGlobalGenerator::FindMakeProgram(mf)) {
     return false;
   }
-  if (auto const* const fastbuildCommand = mf->GetDefinition("CMAKE_MAKE_PROGRAM")) {
+  if (auto const* const fastbuildCommand =
+        mf->GetDefinition("CMAKE_MAKE_PROGRAM")) {
     this->FastbuildCommand = *fastbuildCommand;
     std::vector<std::string> command;
     command.push_back(this->FastbuildCommand);
@@ -120,8 +121,8 @@ cmGlobalFastbuildGenerator::GenerateBuildCommand(
   // Push in the make options
   makeCommand.Add(makeOptions.begin(), makeOptions.end());
 
-  //makeCommand.Add("-showcmds");
-  //makeCommand.Add("-quiet");
+  // makeCommand.Add("-showcmds");
+  // makeCommand.Add("-quiet");
   makeCommand.Add("-monitor");
   makeCommand.Add("-ide");
   makeCommand.Add("-cache");
@@ -206,11 +207,12 @@ void cmGlobalFastbuildGenerator::Generate()
   if (!cmSystemTools::RunSingleCommand(command, &output, &error, nullptr,
                                        workingDir.c_str(),
                                        cmSystemTools::OUTPUT_NONE)) {
-    LocalGenerators[0]->GetMakefile()->IssueMessage(MessageType::FATAL_ERROR,
-                                                    cmStrCat("Running\n '", cmJoin(command, "' '"),
-                                                             "'\n"
-                                                             "failed with:\n ",
-                                                             error, "\n", output));
+    LocalGenerators[0]->GetMakefile()->IssueMessage(
+      MessageType::FATAL_ERROR,
+      cmStrCat("Running\n '", cmJoin(command, "' '"),
+               "'\n"
+               "failed with:\n ",
+               error, "\n", output));
     cmSystemTools::SetFatalErrorOccured();
   }
 #endif
@@ -361,10 +363,9 @@ struct WrapHelper
   std::string operator()(const std::string& in)
   {
     std::string result = m_prefix + in + m_suffix;
-    if (escape_dollar)
-    {
-        cmSystemTools::ReplaceString(result, "$", "^$");
-        cmSystemTools::ReplaceString(result, FASTBUILD_DOLLAR_TAG, "$");
+    if (escape_dollar) {
+      cmSystemTools::ReplaceString(result, "$", "^$");
+      cmSystemTools::ReplaceString(result, FASTBUILD_DOLLAR_TAG, "$");
     }
     return result;
   }
@@ -384,16 +385,16 @@ std::vector<std::string> cmGlobalFastbuildGenerator::Wrap(
 }
 
 std::vector<std::string> cmGlobalFastbuildGenerator::Wrap(
-    const std::set<std::string>& in, const std::string& prefix,
-    const std::string& suffix, const bool escape_dollar)
+  const std::set<std::string>& in, const std::string& prefix,
+  const std::string& suffix, const bool escape_dollar)
 {
-    std::vector<std::string> result;
+  std::vector<std::string> result;
 
-    WrapHelper helper = { prefix, suffix, escape_dollar };
+  WrapHelper helper = { prefix, suffix, escape_dollar };
 
-    std::transform(in.begin(), in.end(), std::back_inserter(result), helper);
+  std::transform(in.begin(), in.end(), std::back_inserter(result), helper);
 
-    return result;
+  return result;
 }
 
 void cmGlobalFastbuildGenerator::WriteDisclaimer(std::ostream& os)
@@ -471,14 +472,13 @@ void cmGlobalFastbuildGenerator::WriteCompilers(std::ostream& os)
 
     // Strip out the path to the compiler
     std::string compilerPath = compilerDef.executable;
-    //cmSystemTools::ConvertToOutputSlashes(compilerPath);
+    // cmSystemTools::ConvertToOutputSlashes(compilerPath);
 
     // Write out the compiler that has been configured
     WriteCommand(os, "Compiler", Quote(compilerDef.name));
     os << "{\n";
-    for (auto const& [key, value] : compilerDef.extraVariables)
-    {
-        WriteVariable(os, key, Quote(value), 1);
+    for (auto const& [key, value] : compilerDef.extraVariables) {
+      WriteVariable(os, key, Quote(value), 1);
     }
     WriteVariable(os, "Executable", Quote(compilerPath), 1);
     WriteVariable(os, "CompilerFamily", Quote(fastbuildFamily), 1);
@@ -488,9 +488,11 @@ void cmGlobalFastbuildGenerator::WriteCompilers(std::ostream& os)
     if (fastbuildFamily == "clang")
       WriteVariable(os, "ClangRewriteIncludes", "false", 1);
     if (!compilerDef.extraFiles.empty())
-        // Do not escape '$' sign, CMAKE_${LANG}_FASTBUILD_EXTRA_FILES might contain FB variables to be expanded (we do use some internaly).
-        // Besides a path cannot contain a '$'
-        WriteArray(os, "ExtraFiles", Wrap(compilerDef.extraFiles, "'", "'", false), 1);
+      // Do not escape '$' sign, CMAKE_${LANG}_FASTBUILD_EXTRA_FILES might
+      // contain FB variables to be expanded (we do use some internaly).
+      // Besides a path cannot contain a '$'
+      WriteArray(os, "ExtraFiles",
+                 Wrap(compilerDef.extraFiles, "'", "'", false), 1);
     os << "}\n";
 
     auto compilerId = compilerDef.name;
@@ -518,9 +520,11 @@ void cmGlobalFastbuildGenerator::AddCompiler(const std::string& language,
 
   // Add the language to the compiler's name
   FastbuildCompiler compilerDef;
-  compilerDef.extraVariables.push_back({"Root", cmSystemTools::GetFilenamePath(compilerLocation) });
+  compilerDef.extraVariables.push_back(
+    { "Root", cmSystemTools::GetFilenamePath(compilerLocation) });
   compilerDef.name = "Compiler";
-  compilerDef.executable = "$Root$/" + cmSystemTools::GetFilenameName(compilerLocation);
+  compilerDef.executable =
+    "$Root$/" + cmSystemTools::GetFilenameName(compilerLocation);
   compilerDef.cmakeCompilerID =
     mf->GetSafeDefinition("CMAKE_" + language + "_COMPILER_ID");
 
@@ -535,56 +539,66 @@ void cmGlobalFastbuildGenerator::AddCompiler(const std::string& language,
       (language == "C" || language == "CXX")) {
     compilerDef.useLightCache = true;
   }
-  compilerDef.extraFiles = cmExpandedList(mf->GetSafeDefinition("CMAKE_" + language + "_FASTBUILD_EXTRA_FILES"));
+  compilerDef.extraFiles = cmExpandedList(
+    mf->GetSafeDefinition("CMAKE_" + language + "_FASTBUILD_EXTRA_FILES"));
 
-  // Automatically add extra files based on compiler (see https://fastbuild.org/docs/functions/compiler.html)
-  if (language == "C" || language == "CXX")
-  {
-      if (compilerDef.cmakeCompilerID == "MSVC")
-      {
-          // https://cmake.org/cmake/help/latest/variable/MSVC_VERSION.html
+  // Automatically add extra files based on compiler (see
+  // https://fastbuild.org/docs/functions/compiler.html)
+  if (language == "C" || language == "CXX") {
+    if (compilerDef.cmakeCompilerID == "MSVC") {
+      // https://cmake.org/cmake/help/latest/variable/MSVC_VERSION.html
 
-          // Visual Studio 17 (19.30 to 19.39)
-          // TODO
+      // Visual Studio 17 (19.30 to 19.39)
+      // TODO
 
-          // Visual Studio 16 (19.20 to 19.29)
-          if (cmSystemTools::VersionCompare(cmSystemTools::OP_GREATER_EQUAL, compilerDef.cmakeCompilerVersion.c_str(), "19.20"))
-          {
-              compilerDef.extraFiles.push_back("$Root$/c1.dll");
-              compilerDef.extraFiles.push_back("$Root$/c1xx.dll");
-              compilerDef.extraFiles.push_back("$Root$/c2.dll");
-              compilerDef.extraFiles.push_back("$Root$/atlprov.dll"); // Only needed if using ATL
-              compilerDef.extraFiles.push_back("$Root$/msobj140.dll");
-              compilerDef.extraFiles.push_back("$Root$/mspdb140.dll");
-              compilerDef.extraFiles.push_back("$Root$/mspdbcore.dll");
-              compilerDef.extraFiles.push_back("$Root$/mspdbsrv.exe");
-              compilerDef.extraFiles.push_back("$Root$/mspft140.dll");
-              compilerDef.extraFiles.push_back("$Root$/msvcp140.dll");
-              compilerDef.extraFiles.push_back("$Root$/msvcp140_atomic_wait.dll"); // Required circa 16.8.3 (14.28.29333)
-              compilerDef.extraFiles.push_back("$Root$/tbbmalloc.dll"); // Required as of 16.2 (14.22.27905)
-              compilerDef.extraFiles.push_back("$Root$/vcruntime140.dll");
-              compilerDef.extraFiles.push_back("$Root$/vcruntime140_1.dll"); // Required as of 16.5.1 (14.25.28610)
-              compilerDef.extraFiles.push_back("$Root$/1033/clui.dll");
-              compilerDef.extraFiles.push_back("$Root$/1033/mspft140ui.dll"); // Localized messages for static analysis
-          }
-          // Visual Studio 15 (19.10 to 19.19)
-          else if (cmSystemTools::VersionCompare(cmSystemTools::OP_GREATER_EQUAL, compilerDef.cmakeCompilerVersion.c_str(), "19.10"))
-          {
-              compilerDef.extraFiles.push_back("$Root$/c1.dll");
-              compilerDef.extraFiles.push_back("$Root$/c1xx.dll");
-              compilerDef.extraFiles.push_back("$Root$/c2.dll");
-              compilerDef.extraFiles.push_back("$Root$/atlprov.dll"); // Only needed if using ATL
-              compilerDef.extraFiles.push_back("$Root$/msobj140.dll");
-              compilerDef.extraFiles.push_back("$Root$/mspdb140.dll");
-              compilerDef.extraFiles.push_back("$Root$/mspdbcore.dll");
-              compilerDef.extraFiles.push_back("$Root$/mspdbsrv.exe");
-              compilerDef.extraFiles.push_back("$Root$/mspft140.dll");
-              compilerDef.extraFiles.push_back("$Root$/msvcp140.dll");
-              compilerDef.extraFiles.push_back("$Root$/vcruntime140.dll");
-              compilerDef.extraFiles.push_back("$Root$/1033/clui.dll");
-          }
+      // Visual Studio 16 (19.20 to 19.29)
+      if (cmSystemTools::VersionCompare(
+            cmSystemTools::OP_GREATER_EQUAL,
+            compilerDef.cmakeCompilerVersion.c_str(), "19.20")) {
+        compilerDef.extraFiles.push_back("$Root$/c1.dll");
+        compilerDef.extraFiles.push_back("$Root$/c1xx.dll");
+        compilerDef.extraFiles.push_back("$Root$/c2.dll");
+        compilerDef.extraFiles.push_back(
+          "$Root$/atlprov.dll"); // Only needed if using ATL
+        compilerDef.extraFiles.push_back("$Root$/msobj140.dll");
+        compilerDef.extraFiles.push_back("$Root$/mspdb140.dll");
+        compilerDef.extraFiles.push_back("$Root$/mspdbcore.dll");
+        compilerDef.extraFiles.push_back("$Root$/mspdbsrv.exe");
+        compilerDef.extraFiles.push_back("$Root$/mspft140.dll");
+        compilerDef.extraFiles.push_back("$Root$/msvcp140.dll");
+        compilerDef.extraFiles.push_back(
+          "$Root$/msvcp140_atomic_wait.dll"); // Required circa 16.8.3
+                                              // (14.28.29333)
+        compilerDef.extraFiles.push_back(
+          "$Root$/tbbmalloc.dll"); // Required as of 16.2 (14.22.27905)
+        compilerDef.extraFiles.push_back("$Root$/vcruntime140.dll");
+        compilerDef.extraFiles.push_back(
+          "$Root$/vcruntime140_1.dll"); // Required as of 16.5.1 (14.25.28610)
+        compilerDef.extraFiles.push_back("$Root$/1033/clui.dll");
+        compilerDef.extraFiles.push_back(
+          "$Root$/1033/mspft140ui.dll"); // Localized messages for static
+                                         // analysis
       }
-      // TODO: Handle Intel compiler
+      // Visual Studio 15 (19.10 to 19.19)
+      else if (cmSystemTools::VersionCompare(
+                 cmSystemTools::OP_GREATER_EQUAL,
+                 compilerDef.cmakeCompilerVersion.c_str(), "19.10")) {
+        compilerDef.extraFiles.push_back("$Root$/c1.dll");
+        compilerDef.extraFiles.push_back("$Root$/c1xx.dll");
+        compilerDef.extraFiles.push_back("$Root$/c2.dll");
+        compilerDef.extraFiles.push_back(
+          "$Root$/atlprov.dll"); // Only needed if using ATL
+        compilerDef.extraFiles.push_back("$Root$/msobj140.dll");
+        compilerDef.extraFiles.push_back("$Root$/mspdb140.dll");
+        compilerDef.extraFiles.push_back("$Root$/mspdbcore.dll");
+        compilerDef.extraFiles.push_back("$Root$/mspdbsrv.exe");
+        compilerDef.extraFiles.push_back("$Root$/mspft140.dll");
+        compilerDef.extraFiles.push_back("$Root$/msvcp140.dll");
+        compilerDef.extraFiles.push_back("$Root$/vcruntime140.dll");
+        compilerDef.extraFiles.push_back("$Root$/1033/clui.dll");
+      }
+    }
+    // TODO: Handle Intel compiler
   }
 
   this->Compilers[language] = compilerDef;
@@ -717,12 +731,12 @@ std::set<std::string> cmGlobalFastbuildGenerator::WriteObjectLists(
       WriteArray(*BuildFileStream, "CompilerInputFiles",
                  Wrap(ObjectList.CompilerInputFiles), 2);
       if (!ObjectList.PCHInputFile.empty()) {
-          WriteVariable(*BuildFileStream, "PCHInputFile",
-              Quote(ObjectList.PCHInputFile), 2);
-          WriteVariable(*BuildFileStream, "PCHOptions",
-              Quote(ObjectList.PCHOptions), 2);
+        WriteVariable(*BuildFileStream, "PCHInputFile",
+                      Quote(ObjectList.PCHInputFile), 2);
+        WriteVariable(*BuildFileStream, "PCHOptions",
+                      Quote(ObjectList.PCHOptions), 2);
       }
-      if(!ObjectList.PCHOutputFile.empty()) {
+      if (!ObjectList.PCHOutputFile.empty()) {
         WriteVariable(*BuildFileStream, "PCHOutputFile",
                       Quote(ObjectList.PCHOutputFile), 2);
       }
@@ -745,7 +759,7 @@ std::set<std::string> cmGlobalFastbuildGenerator::WriteLinker(
 
     std::set<std::string> PreBuildDependencies = dependencies;
     for (const auto& library : LinkerNode.Libraries) {
-        PreBuildDependencies.erase(library);
+      PreBuildDependencies.erase(library);
     }
 
     if (LinkerNode.Type == FastbuildLinkerNode::EXECUTABLE ||
@@ -797,8 +811,7 @@ std::set<std::string> cmGlobalFastbuildGenerator::WriteLinker(
                       Quote(LinkerNode.LinkerType), 2);
         WriteVariable(*BuildFileStream, "Compiler", LinkerNode.Compiler, 2);
         WriteVariable(*BuildFileStream, "CompilerOptions",
-                      Quote(LinkerNode.CompilerOptions),
-                      2);
+                      Quote(LinkerNode.CompilerOptions), 2);
         WriteVariable(*BuildFileStream, "CompilerOutputPath", "'/dummy/'", 2);
       }
       Indent(*BuildFileStream, 1);
@@ -810,16 +823,16 @@ std::set<std::string> cmGlobalFastbuildGenerator::WriteLinker(
 }
 
 void cmGlobalFastbuildGenerator::WriteAlias(
-    const std::string& alias, const std::vector<std::string>& targets)
+  const std::string& alias, const std::vector<std::string>& targets)
 {
-    if (targets.empty())
-        return;
-    WriteCommand(*BuildFileStream, "Alias", Quote(alias), 1);
-    Indent(*BuildFileStream, 1);
-    *BuildFileStream << "{\n";
-    WriteArray(*BuildFileStream, "Targets", Wrap(targets), 2);
-    Indent(*BuildFileStream, 1);
-    *BuildFileStream << "}\n";
+  if (targets.empty())
+    return;
+  WriteCommand(*BuildFileStream, "Alias", Quote(alias), 1);
+  Indent(*BuildFileStream, 1);
+  *BuildFileStream << "{\n";
+  WriteArray(*BuildFileStream, "Targets", Wrap(targets), 2);
+  Indent(*BuildFileStream, 1);
+  *BuildFileStream << "}\n";
 }
 
 void cmGlobalFastbuildGenerator::WriteAlias(
@@ -837,6 +850,7 @@ void cmGlobalFastbuildGenerator::WriteAlias(
 
 void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
 {
+  // Add "all" and "noop" targets
   {
     FastbuildTarget allTarget;
     FastbuildAliasNode allNode;
@@ -848,57 +862,72 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
       }
     }
 
-    FastbuildExecNode noopNode;
-    noopNode.Name = "noop";
+    // "noop" target
+    {
+      FastbuildExecNode noopNode;
+      noopNode.Name = "noop";
 #ifdef _WIN32
-    noopNode.ExecExecutable = cmSystemTools::FindProgram("cmd.exe");
-    noopNode.ExecArguments = "/C cd .";
+      noopNode.ExecExecutable = cmSystemTools::FindProgram("cmd.exe");
+      noopNode.ExecArguments = "/C cd .";
 #else
-    noopNode.ExecExecutable = cmSystemTools::FindProgram("bash");
-    noopNode.ExecArguments = "-c :";
+      noopNode.ExecExecutable = cmSystemTools::FindProgram("bash");
+      noopNode.ExecArguments = "-c :";
 #endif
-    noopNode.ExecUseStdOutAsOutput = true;
-    noopNode.ExecOutput = "noop.txt";
+      noopNode.ExecUseStdOutAsOutput = true;
+      noopNode.ExecOutput = "noop.txt";
 
-    FastbuildTarget noop;
-    noop.Name = noopNode.Name;
-    noop.ExecNodes.push_back(noopNode);
+      FastbuildTarget noop;
+      noop.Name = noopNode.Name;
+      noop.ExecNodes.push_back(noopNode);
 
-    FastbuildTargets[noop.Name] = noop;
+      FastbuildTargets[noop.Name] = noop;
 
-    if (allNode.Targets.empty()) {
-      allNode.Targets.insert(noop.Name + "-products");
-      allTarget.Dependencies.push_back(noop.Name);
+      if (allNode.Targets.empty()) {
+        allNode.Targets.insert(noop.Name + "-products");
+        allTarget.Dependencies.push_back(noop.Name);
+      }
     }
 
-    allTarget.Name = allNode.Name = "all";
-    allTarget.AliasNodes.push_back(allNode);
-    allTarget.IsGlobal = true;
+    // "all" target
+    {
+      allTarget.Name = allNode.Name = "all";
+      allTarget.AliasNodes.push_back(allNode);
+      allTarget.IsGlobal = true;
 
 #ifdef _WIN32
-    auto& VCXProject = allTarget.VCXProjects.emplace_back();
-    std::string targetName = "ALL_BUILD";
+      auto& VCXProject = allTarget.VCXProjects.emplace_back();
+      std::string targetName = "ALL_BUILD";
 
-    std::string targetCompileOutDirectory =
+      std::string targetCompileOutDirectory =
         this->LocalGenerators[0]->GetCurrentBinaryDirectory();
 
-    VCXProject.Name = "all-vcxproj";
-    VCXProject.ProjectOutput = ConvertToFastbuildPath(targetCompileOutDirectory + "/" + targetName + ".vcxproj");
-    VCXProject.Platform = "X64";
-    VCXProject.Config = ((cmLocalCommonGenerator*)this->LocalGenerators[0].get())->GetConfigNames().front();
-    VCXProject.Target = "all";
-    VCXProject.Folder = "CMakePredefinedTargets";
+      VCXProject.Name = "all-vcxproj";
+      VCXProject.ProjectOutput = ConvertToFastbuildPath(
+        targetCompileOutDirectory + "/" + targetName + ".vcxproj");
+      VCXProject.Platform = "X64";
+      VCXProject.Config =
+        ((cmLocalCommonGenerator*)this->LocalGenerators[0].get())
+          ->GetConfigNames()
+          .front();
+      VCXProject.Target = "all";
+      VCXProject.Folder = "CMakePredefinedTargets";
 
-    std::string cmakeCommand =
+      std::string cmakeCommand =
         this->LocalGenerators[0]->ConvertToOutputFormat(
-            cmSystemTools::GetCMakeCommand(), cmLocalGenerator::SHELL);
-    VCXProject.ProjectBuildCommand = cmStrCat(cmakeCommand, " --build ", LocalGenerators[0]->GetCurrentBinaryDirectory(), " --target \"all\" --config ", VCXProject.Config);
-    VCXProject.ProjectRebuildCommand = cmStrCat(VCXProject.ProjectBuildCommand, " -- -clean");
+          cmSystemTools::GetCMakeCommand(), cmLocalGenerator::SHELL);
+      VCXProject.ProjectBuildCommand =
+        cmStrCat(cmakeCommand, " --build ",
+                 LocalGenerators[0]->GetCurrentBinaryDirectory(),
+                 " --target \"all\" --config ", VCXProject.Config);
+      VCXProject.ProjectRebuildCommand =
+        cmStrCat(VCXProject.ProjectBuildCommand, " -- -clean");
 #endif
 
-    FastbuildTargets[allTarget.Name] = allTarget;
+      FastbuildTargets[allTarget.Name] = allTarget;
+    }
   }
 
+  // Add "rebuild-bff" target
   {
     std::vector<std::string> implicitDeps;
     for (auto& lg : LocalGenerators) {
@@ -1043,17 +1072,16 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
   // Reuse precompiled headers whenever possible
   std::set<std::string> pch;
   for (const auto& targetName : orderedTargets) {
-      auto& Target = FastbuildTargets[targetName];
+    auto& Target = FastbuildTargets[targetName];
 
-      for (auto& objNode : Target.ObjectListNodes) {
-          if (pch.count(objNode.PCHOutputFile)) {
-              objNode.PCHInputFile.clear();
-              objNode.PCHOptions.clear();
-          }
-          else {
-              pch.insert(objNode.PCHOutputFile);
-          }
+    for (auto& objNode : Target.ObjectListNodes) {
+      if (pch.count(objNode.PCHOutputFile)) {
+        objNode.PCHInputFile.clear();
+        objNode.PCHOptions.clear();
+      } else {
+        pch.insert(objNode.PCHOutputFile);
       }
+    }
   }
 
   std::string VSConfig, VSPlatform;
@@ -1089,19 +1117,22 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
     auto objectLists =
       this->WriteObjectLists(Target.ObjectListNodes, dependencies);
     targetNodes.insert(objectLists.begin(), objectLists.end());
-    dependencies = this->WriteExecs(Target.PreLinkExecNodes, objectLists.empty() ? dependencies : objectLists);
+    dependencies =
+      this->WriteExecs(Target.PreLinkExecNodes,
+                       objectLists.empty() ? dependencies : objectLists);
     targetNodes.insert(dependencies.begin(), dependencies.end());
     // We want to depend on the products, this way we make sure we are waiting
     // for all generations
     for (const auto& dep : Target.Dependencies) {
-        if (!FastbuildTargets.at(dep).IsGlobal)
-            dependencies.insert(dep + "-products");
-        else
-            dependencies.insert(dep);
+      if (!FastbuildTargets.at(dep).IsGlobal)
+        dependencies.insert(dep + "-products");
+      else
+        dependencies.insert(dep);
     }
     auto linked = this->WriteLinker(Target.LinkerNodes, dependencies);
     targetNodes.insert(linked.begin(), linked.end());
-    auto products = this->WriteExecs(Target.PostBuildExecNodes, linked.empty() ? dependencies  : linked);
+    auto products = this->WriteExecs(Target.PostBuildExecNodes,
+                                     linked.empty() ? dependencies : linked);
     targetNodes.insert(products.begin(), products.end());
 
     for (const auto& it : Target.AliasNodes) {
@@ -1114,9 +1145,9 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
         this->WriteAlias(Target.Name, products);
       }
       for (const auto& object : objectLists)
-          products.erase(object);
+        products.erase(object);
       for (const auto& link : linked)
-          products.erase(link);
+        products.erase(link);
       if (products.empty())
         products.insert(Target.Name);
       this->WriteAlias(Target.Name + "-products", products);
@@ -1128,100 +1159,120 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
     }
 #ifdef _WIN32
     for (const auto& VCXProject : Target.VCXProjects) {
-        if (!Target.IsGlobal && Target.LinkerNodes.front().Type == FastbuildLinkerNode::EXECUTABLE)
-            SolutionBuildProjects.push_back(VCXProject.Name);
+      if (!Target.IsGlobal &&
+          Target.LinkerNodes.front().Type == FastbuildLinkerNode::EXECUTABLE)
+        SolutionBuildProjects.push_back(VCXProject.Name);
 
-        WriteCommand(*BuildFileStream, "VCXProject", Quote(VCXProject.Name), 1);
-        Indent(*BuildFileStream, 1);
-        *BuildFileStream << "{\n";
-        {
-            WriteVariable(*BuildFileStream, "ProjectOutput", Quote(VCXProject.ProjectOutput), 2);
+      WriteCommand(*BuildFileStream, "VCXProject", Quote(VCXProject.Name), 1);
+      Indent(*BuildFileStream, 1);
+      *BuildFileStream << "{\n";
+      {
+        WriteVariable(*BuildFileStream, "ProjectOutput",
+                      Quote(VCXProject.ProjectOutput), 2);
 
-            std::vector<std::string> ProjectFiles, ProjectFilesWithFolders;
-            for (const auto& [folder, files] : VCXProject.ProjectFiles) {
-                if (folder.empty()) {
-                    for (const auto& file : files)
-                        ProjectFiles.push_back(file);
-                }
-                else {
-                    std::string folderId = folder;
-                    cmSystemTools::ReplaceString(folderId, " ", "_");
-                    cmSystemTools::ReplaceString(folderId, "/", "_");
-                    cmSystemTools::ReplaceString(folderId, "\\", "_");
-                    cmSystemTools::ReplaceString(folderId, "..", "_");
-                    cmSystemTools::ReplaceString(folderId, ".", "_");
+        std::vector<std::string> ProjectFiles, ProjectFilesWithFolders;
+        for (const auto& [folder, files] : VCXProject.ProjectFiles) {
+          if (folder.empty()) {
+            for (const auto& file : files)
+              ProjectFiles.push_back(file);
+          } else {
+            std::string folderId = folder;
+            cmSystemTools::ReplaceString(folderId, " ", "_");
+            cmSystemTools::ReplaceString(folderId, "/", "_");
+            cmSystemTools::ReplaceString(folderId, "\\", "_");
+            cmSystemTools::ReplaceString(folderId, "..", "_");
+            cmSystemTools::ReplaceString(folderId, ".", "_");
 
-                    std::stringstream ss;
-                    WriteVariable(ss, "Folder", Quote(folder), 2);
-                    WriteArray(ss, "Files", Wrap(files), 2);
-                    WriteVariable(*BuildFileStream, folderId, "[\n" + ss.str() + "]", 1);
-
-                    ProjectFilesWithFolders.push_back("." + folderId);
-                }
-            }
-            if (!ProjectFiles.empty())
-                WriteArray(*BuildFileStream, "ProjectFiles", Wrap(ProjectFiles), 2);
-            if (!ProjectFilesWithFolders.empty())
-                WriteArray(*BuildFileStream, "ProjectFilesWithFolders", ProjectFilesWithFolders, 2);
-
-            if (!VCXProject.UserProps.empty()) {
-                std::stringstream ss;
-                WriteVariable(ss, "Condition", Quote("Exists('" + VCXProject.UserProps + "')"), 3);
-                WriteVariable(ss, "Project", Quote(VCXProject.UserProps), 3);
-                WriteVariable(*BuildFileStream, "UserProps", "[\n" + ss.str() + "]", 2);
-                WriteArray(*BuildFileStream, "ProjectProjectImports", { ".UserProps" }, 2);
-            }
-            if (!VCXProject.LocalDebuggerCommand.empty()) {
-                WriteVariable(*BuildFileStream, "LocalDebuggerCommand", Quote(VCXProject.LocalDebuggerCommand), 2);
-            }
-            if (!VCXProject.LocalDebuggerCommandArguments.empty()) {
-                WriteVariable(*BuildFileStream, "LocalDebuggerCommandArguments", Quote(VCXProject.LocalDebuggerCommandArguments), 2);
-            }
             std::stringstream ss;
-            WriteVariable(ss, "Platform", Quote(VCXProject.Platform), 3);
-            WriteVariable(ss, "Config", Quote(VCXProject.Config), 3);
-            WriteVariable(ss, "Target", Quote(VCXProject.Target), 3);
-            WriteVariable(ss, "ProjectBuildCommand", Quote(VCXProject.ProjectBuildCommand), 3);
-            WriteVariable(ss, "ProjectRebuildCommand", Quote(VCXProject.ProjectRebuildCommand), 3);
-            WriteVariable(*BuildFileStream, "ProjectConfigs", "[\n" + ss.str() + "]", 2);
-        }
-        Indent(*BuildFileStream, 1);
-        *BuildFileStream << "}\n";
+            WriteVariable(ss, "Folder", Quote(folder), 2);
+            WriteArray(ss, "Files", Wrap(files), 2);
+            WriteVariable(*BuildFileStream, folderId, "[\n" + ss.str() + "]",
+                          1);
 
-        VSProjects[VCXProject.Folder].push_back(VCXProject.Name);
-        for (const auto& dep : Target.Dependencies) {
-            for (const auto& depVCXProject : FastbuildTargets.at(dep).VCXProjects) {
-                VSDependencies[VCXProject.Name].push_back(depVCXProject.Name);
-            }
+            ProjectFilesWithFolders.push_back("." + folderId);
+          }
         }
-        VSConfig = VCXProject.Config;
-        VSPlatform = VCXProject.Platform;
+        if (!ProjectFiles.empty())
+          WriteArray(*BuildFileStream, "ProjectFiles", Wrap(ProjectFiles), 2);
+        if (!ProjectFilesWithFolders.empty())
+          WriteArray(*BuildFileStream, "ProjectFilesWithFolders",
+                     ProjectFilesWithFolders, 2);
+
+        if (!VCXProject.UserProps.empty()) {
+          std::stringstream ss;
+          WriteVariable(ss, "Condition",
+                        Quote("Exists('" + VCXProject.UserProps + "')"), 3);
+          WriteVariable(ss, "Project", Quote(VCXProject.UserProps), 3);
+          WriteVariable(*BuildFileStream, "UserProps", "[\n" + ss.str() + "]",
+                        2);
+          WriteArray(*BuildFileStream, "ProjectProjectImports",
+                     { ".UserProps" }, 2);
+        }
+        if (!VCXProject.LocalDebuggerCommand.empty()) {
+          WriteVariable(*BuildFileStream, "LocalDebuggerCommand",
+                        Quote(VCXProject.LocalDebuggerCommand), 2);
+        }
+        if (!VCXProject.LocalDebuggerCommandArguments.empty()) {
+          WriteVariable(*BuildFileStream, "LocalDebuggerCommandArguments",
+                        Quote(VCXProject.LocalDebuggerCommandArguments), 2);
+        }
+        std::stringstream ss;
+        WriteVariable(ss, "Platform", Quote(VCXProject.Platform), 3);
+        WriteVariable(ss, "Config", Quote(VCXProject.Config), 3);
+        WriteVariable(ss, "Target", Quote(VCXProject.Target), 3);
+        WriteVariable(ss, "ProjectBuildCommand",
+                      Quote(VCXProject.ProjectBuildCommand), 3);
+        WriteVariable(ss, "ProjectRebuildCommand",
+                      Quote(VCXProject.ProjectRebuildCommand), 3);
+        WriteVariable(*BuildFileStream, "ProjectConfigs",
+                      "[\n" + ss.str() + "]", 2);
+      }
+      Indent(*BuildFileStream, 1);
+      *BuildFileStream << "}\n";
+
+      VSProjects[VCXProject.Folder].push_back(VCXProject.Name);
+      for (const auto& dep : Target.Dependencies) {
+        for (const auto& depVCXProject :
+             FastbuildTargets.at(dep).VCXProjects) {
+          VSDependencies[VCXProject.Name].push_back(depVCXProject.Name);
+        }
+      }
+      VSConfig = VCXProject.Config;
+      VSPlatform = VCXProject.Platform;
     }
 #endif
 
     *this->GetBuildFileStream() << "}\n";
   }
 
+  // Write the VSSolution node on Windows
 #ifdef _WIN32
   WriteCommand(*BuildFileStream, "VSSolution", Quote("VSSolution-all"));
   *BuildFileStream << "{\n";
   {
-    WriteVariable(*BuildFileStream, "SolutionOutput", Quote(cmStrCat(LocalGenerators[0]->GetCurrentBinaryDirectory(), "/", LocalGenerators[0]->GetProjectName(), ".sln")), 1);
+    WriteVariable(
+      *BuildFileStream, "SolutionOutput",
+      Quote(cmStrCat(LocalGenerators[0]->GetCurrentBinaryDirectory(), "/",
+                     LocalGenerators[0]->GetProjectName(), ".sln")),
+      1);
 
     std::vector<std::string> SolutionProjects;
     for (const auto& [_, projects] : VSProjects) {
       for (const auto& project : projects)
         SolutionProjects.push_back(project);
     }
-    WriteArray(*BuildFileStream, "SolutionProjects", Wrap(SolutionProjects), 1);
+    WriteArray(*BuildFileStream, "SolutionProjects", Wrap(SolutionProjects),
+               1);
     std::stringstream ss;
     WriteVariable(ss, "Platform", Quote(VSPlatform), 2);
     WriteVariable(ss, "Config", Quote(VSConfig), 2);
-    WriteVariable(*BuildFileStream, "SolutionConfig", "[\n" + ss.str() + "]", 1);
-    WriteArray(*BuildFileStream, "SolutionConfigs", {".SolutionConfig"}, 1);
+    WriteVariable(*BuildFileStream, "SolutionConfig", "[\n" + ss.str() + "]",
+                  1);
+    WriteArray(*BuildFileStream, "SolutionConfigs", { ".SolutionConfig" }, 1);
     std::vector<std::string> SolutionFolders;
     for (const auto& [folder, projects] : VSProjects) {
-      if (folder.empty()) continue;
+      if (folder.empty())
+        continue;
 
       std::string folderId = folder;
       cmSystemTools::ReplaceString(folderId, " ", "_");
@@ -1240,21 +1291,23 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
 
     std::vector<std::string> SolutionDependencies;
     for (const auto& [project, dependencies] : VSDependencies) {
-        std::string depsId = project + "_deps";
+      std::string depsId = project + "_deps";
 
-        cmSystemTools::ReplaceString(depsId, "-", "_");
+      cmSystemTools::ReplaceString(depsId, "-", "_");
 
-        std::stringstream ss;
-        WriteArray(ss, "Projects", Wrap(std::vector<std::string>{project}), 2);
-        WriteArray(ss, "Dependencies", Wrap(dependencies), 2);
-        WriteVariable(*BuildFileStream, depsId, "[\n" + ss.str() + "]", 1);
+      std::stringstream ss;
+      WriteArray(ss, "Projects", Wrap(std::vector<std::string>{ project }), 2);
+      WriteArray(ss, "Dependencies", Wrap(dependencies), 2);
+      WriteVariable(*BuildFileStream, depsId, "[\n" + ss.str() + "]", 1);
 
-        SolutionDependencies.push_back("." + depsId);
+      SolutionDependencies.push_back("." + depsId);
     }
     if (!SolutionDependencies.empty())
-        WriteArray(*BuildFileStream, "SolutionDependencies", SolutionDependencies, 1);
+      WriteArray(*BuildFileStream, "SolutionDependencies",
+                 SolutionDependencies, 1);
 
-     WriteArray(*BuildFileStream, "SolutionBuildProject", Wrap(SolutionBuildProjects), 1);
+    WriteArray(*BuildFileStream, "SolutionBuildProject",
+               Wrap(SolutionBuildProjects), 1);
   }
 #endif
   *BuildFileStream << "}\n";
@@ -1277,8 +1330,8 @@ bool cmGlobalFastbuildGenerator::IsExcluded(cmGeneratorTarget* target)
 }
 
 bool cmGlobalFastbuildGenerator::Open(const std::string& bindir,
-                                         const std::string& projectName,
-                                         bool dryRun)
+                                      const std::string& projectName,
+                                      bool dryRun)
 {
 #ifdef _WIN32
   std::string sln = bindir + "/" + projectName + ".sln";
@@ -1289,8 +1342,7 @@ bool cmGlobalFastbuildGenerator::Open(const std::string& bindir,
 
   sln = cmSystemTools::ConvertToOutputPath(sln);
 
-  auto OpenSolution = [](std::string sln)
-  {
+  auto OpenSolution = [](std::string sln) {
     HRESULT comInitialized =
       CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
     if (FAILED(comInitialized)) {
