@@ -654,11 +654,14 @@ std::set<std::string> cmGlobalFastbuildGenerator::WriteExecs(
   for (const auto& Exec : Execs) {
     output.insert(Exec.Name);
 
+    auto execAlways = Exec.ExecAlways;
     auto execInput = Exec.ExecInput;
     for (auto const& dep : dependencies) {
       if (std::find(execInput.begin(), execInput.end(), dep) ==
           execInput.end()) {
         execInput.push_back(dep);
+        // No longer need to always build this target
+        execAlways = false;
       }
     }
 
@@ -699,7 +702,7 @@ std::set<std::string> cmGlobalFastbuildGenerator::WriteExecs(
         WriteVariable(*BuildFileStream, "ExecAlwaysShowOutput", "true", 2);
         WriteVariable(*BuildFileStream, "ExecOutput", Quote(Exec.ExecOutput),
                       2);
-        if (Exec.ExecAlways) {
+        if (execAlways) {
           WriteVariable(*BuildFileStream, "ExecAlways", "true", 2);
         }
       }
