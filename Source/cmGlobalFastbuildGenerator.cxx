@@ -1099,6 +1099,7 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
     }
   }
 
+  // Write all ordered targets
   std::string VSConfig, VSPlatform;
   std::vector<std::string> SolutionBuildProjects;
   std::map<std::string, std::vector<std::string>> VSProjects, VSDependencies;
@@ -1106,8 +1107,20 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
   for (const auto& targetName : orderedTargets) {
     auto& Target = FastbuildTargets[targetName];
 
+    // Process target ExecNodes
+    // 1- If it has already been written, remove it from this Target
+    // 2- If a ExecInput refers to a known target, replace with product name
+    //    (this way we make sure we are waiting for all generations)
     for (auto it = Target.ExecNodes.begin(); it != Target.ExecNodes.end();) {
       if (allCustomCommands.insert(it->Name).second) {
+        auto& target = *it;
+        for (auto& dep : target.ExecInput) {
+          if (auto const fbTargetIt = FastbuildTargets.find(dep);
+              fbTargetIt != FastbuildTargets.end() &&
+              !fbTargetIt->second.IsGlobal) {
+            dep += "-products";
+          }
+        }
         ++it;
       } else {
         it = Target.ExecNodes.erase(it);
@@ -1139,10 +1152,11 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
     // We want to depend on the products, this way we make sure we are waiting
     // for all generations
     for (const auto& dep : Target.Dependencies) {
-      if (!FastbuildTargets.at(dep).IsGlobal)
+      if (!FastbuildTargets.at(dep).IsGlobal) {
         dependencies.insert(dep + "-products");
-      else
+      } else {
         dependencies.insert(dep);
+      }
     }
     auto linked = this->WriteLinker(Target.LinkerNodes, dependencies);
     targetNodes.insert(linked.begin(), linked.end());
@@ -1172,6 +1186,8 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
         this->WriteAlias(Target.Name, products);
       }
     }
+
+    // Write the VSProject node on Windows
 #ifdef _WIN32
     for (const auto& VCXProject : Target.VCXProjects) {
       if (!Target.IsGlobal &&

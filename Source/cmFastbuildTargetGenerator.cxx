@@ -277,14 +277,20 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
       targetName += "_" + buildStep + "_" + std::to_string(++i);
     }
     targetName = GetCustomCommandTargetName(cc, targetName);
-    std::vector<std::string> inputs;
+    std::vector<std::string> inputTargets;
+    std::vector<std::string> inputFiles;
     // Take the dependencies listed and split into targets and files.
     for (const std::string& dep : ccg.GetDepends()) {
-      cmTarget* target = GlobalCommonGenerator->FindTarget(dep);
-      std::string realDep;
-      GetLocalGenerator()->GetRealDependency(dep, this->GetConfigName(),
-                                             realDep);
-      inputs.push_back(realDep);
+      if (GlobalCommonGenerator->FindTarget(dep)) {
+        // Keep as target name for now, we'll need to search for a target later
+        inputTargets.push_back(dep);
+      } else {
+        // Try to convert file name to full path
+        std::string realDep;
+        GetLocalGenerator()->GetRealDependency(dep, this->GetConfigName(),
+                                               realDep);
+        inputFiles.push_back(realDep);
+      }
     }
 
     std::vector<std::string> cmdLines;
@@ -348,7 +354,8 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
       ccg.AppendArguments(i, cmd);
     }
 
-    std::for_each(inputs.begin(), inputs.end(), &UnescapeFastbuildVariables);
+    std::for_each(inputFiles.begin(), inputFiles.end(),
+                  &UnescapeFastbuildVariables);
 
     cmGlobalFastbuildGenerator::FastbuildExecNode execNode;
     execNode.Name = targetName;
@@ -362,7 +369,7 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
         }
       }
     }
-    execNode.ExecAlways = inputs.empty();
+    execNode.ExecAlways = inputFiles.empty() && inputTargets.empty();
     for (std::string const& output : cc.GetByproducts()) {
       if (cmSourceFile* sf = this->Makefile->GetSource(output)) {
         if (!sf->GetPropertyAsBool("SYMBOLIC")) {
@@ -443,18 +450,25 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
 #endif
       std::string workingDirectory = ccg.GetWorkingDirectory();
       if (workingDirectory.empty()) {
-          workingDirectory =
-              this->LocalCommonGenerator->GetCurrentBinaryDirectory();
+        workingDirectory =
+          this->LocalCommonGenerator->GetCurrentBinaryDirectory();
       }
       if (!workingDirectory.empty()) {
         execNode.ExecWorkingDir = workingDirectory;
       }
     }
 
-    inputs.erase(std::remove_if(inputs.begin(), inputs.end(),
-                                [](const auto& s) { return s.empty(); }),
-                 inputs.end());
-    execNode.ExecInput = GetGlobalGenerator()->ConvertToFastbuildPath(inputs);
+    // Remove empty file names
+    inputFiles.erase(std::remove_if(inputFiles.begin(), inputFiles.end(),
+                                    [](const auto& s) { return s.empty(); }),
+                     inputFiles.end());
+    // Add files to input dependencies, after being converted to local path
+    execNode.ExecInput =
+      GetGlobalGenerator()->ConvertToFastbuildPath(inputFiles);
+    // Also add targets to input dependencies
+    for (auto const& target : inputTargets) {
+      execNode.ExecInput.push_back(target);
+    }
 
     // Make sure we execute in order if it's a buildStep
     if (!buildStep.empty() && !nodes.empty())
