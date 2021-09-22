@@ -1351,8 +1351,8 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
     WriteArray(*BuildFileStream, "SolutionBuildProject",
                Wrap(SolutionBuildProjects), 1);
   }
-#endif
   *BuildFileStream << "}\n";
+#endif
 }
 
 std::string cmGlobalFastbuildGenerator::GetTargetName(
