@@ -446,7 +446,8 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
       execNode.ExecExecutable = cmSystemTools::FindProgram("cmd.exe");
       execNode.ExecArguments = "/C " + scriptFileName;
 #else
-      execNode.ExecExecutable = ConvertToFastbuildPath(scriptFileName);
+      execNode.ExecExecutable = cmSystemTools::FindProgram("sh");
+      execNode.ExecArguments = scriptFileName;
 #endif
       std::string workingDirectory = ccg.GetWorkingDirectory();
       if (workingDirectory.empty()) {

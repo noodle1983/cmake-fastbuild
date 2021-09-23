@@ -888,7 +888,7 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
       noopNode.ExecExecutable = cmSystemTools::FindProgram("cmd.exe");
       noopNode.ExecArguments = "/C cd .";
 #else
-      noopNode.ExecExecutable = cmSystemTools::FindProgram("bash");
+      noopNode.ExecExecutable = cmSystemTools::FindProgram("sh");
       noopNode.ExecArguments = "-c :";
 #endif
       noopNode.ExecUseStdOutAsOutput = true;
