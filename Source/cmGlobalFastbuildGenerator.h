@@ -14,10 +14,10 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
+#include <utility>
+
 #include "cmGlobalCommonGenerator.h"
 #include "cmStateTypes.h"
-
-#include <utility>
 
 #define FASTBUILD_DOLLAR_TAG "FASTBUILD_DOLLAR_TAG"
 
@@ -321,12 +321,11 @@ public:
   bool IsExcluded(cmGeneratorTarget* target);
 
   std::set<std::string> WriteExecs(const std::vector<FastbuildExecNode>&,
-                                      const std::set<std::string>&);
+                                   const std::set<std::string>&);
   std::set<std::string> WriteObjectLists(
-    const std::vector<FastbuildObjectListNode>&,
-    const std::set<std::string>&);
+    const std::vector<FastbuildObjectListNode>&, const std::set<std::string>&);
   std::set<std::string> WriteLinker(const std::vector<FastbuildLinkerNode>&,
-                                       const std::set<std::string>&);
+                                    const std::set<std::string>&);
   void WriteAlias(const std::string&, const std::set<std::string>&);
   void WriteAlias(const std::string&, const std::vector<std::string>&);
 
