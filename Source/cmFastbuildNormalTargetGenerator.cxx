@@ -722,8 +722,7 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
         (language == "C" || language == "CXX" || language == "Fortran" ||
          language == "CUDA")) {
       std::string const clauncher_prop = language + "_COMPILER_LAUNCHER";
-      auto clauncher =
-        this->GeneratorTarget->GetProperty(clauncher_prop);
+      auto clauncher = this->GeneratorTarget->GetProperty(clauncher_prop);
       if (clauncher) {
         compilerLauncher = *clauncher;
       }
@@ -866,16 +865,14 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
         command.flags = baseCompileFlags;
         command.usePCH = usePCH;
 
-        if (auto objectOutputs =
-              srcFile->GetProperty("OBJECT_OUTPUTS")) {
+        if (auto objectOutputs = srcFile->GetProperty("OBJECT_OUTPUTS")) {
           auto outputs = cmExpandedList(*objectOutputs);
           outputs = GetGlobalGenerator()->ConvertToFastbuildPath(outputs);
           for (const auto& output : outputs)
             commandObjects.extraOutputs.insert(output);
         }
 
-        if (auto objectDepends =
-              srcFile->GetProperty("OBJECT_DEPENDS")) {
+        if (auto objectDepends = srcFile->GetProperty("OBJECT_DEPENDS")) {
           auto dependencies = cmExpandedList(*objectDepends);
           dependencies =
             GetGlobalGenerator()->ConvertToFastbuildPath(dependencies);
@@ -887,7 +884,8 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
     }
 
     // Iterate over all subObjectGroups
-    std::string objectGroupRuleName = cmStrCat(language, "_ObjectGroup_", targetName);
+    std::string objectGroupRuleName =
+      cmStrCat(language, "_ObjectGroup_", targetName);
     std::vector<std::string> configObjectGroups;
     int groupNameCount = 1;
     for (const auto& [key, command] : commandPermutations) {
@@ -895,7 +893,8 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
         std::string targetCompileOutDirectory =
           this->GeneratorTarget->GetSupportDirectory();
 
-        const auto ruleName = cmStrCat(objectGroupRuleName, "-", folderName, "-", std::to_string(groupNameCount++));
+        const auto ruleName = cmStrCat(objectGroupRuleName, "-", folderName,
+                                       "-", std::to_string(groupNameCount++));
 
         cmGlobalFastbuildGenerator::FastbuildObjectListNode objectListNode;
 
@@ -985,8 +984,11 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
       dependencies.emplace(object.Name, dependency);
     }
   }
-  // HACK: Makes sure that the CUDA object files go to the bottom, makes it easier for Fastbuild to pick the right includes
-  std::partition(objectNames.begin(), objectNames.end(), [](const auto& name) { return name.substr(0, 2) ==  "C_" || name.substr(0, 4) == "CXX_"; });
+  // HACK: Makes sure that the CUDA object files go to the bottom, makes it
+  // easier for Fastbuild to pick the right includes
+  std::partition(objectNames.begin(), objectNames.end(), [](const auto& name) {
+    return name.substr(0, 2) == "C_" || name.substr(0, 4) == "CXX_";
+  });
   cmGlobalFastbuildGenerator::SortByDependencies(objectNames, dependencies);
 
   std::vector<cmGlobalFastbuildGenerator::FastbuildObjectListNode> objects;
@@ -1107,7 +1109,6 @@ cmFastbuildNormalTargetGenerator::GenerateLink(
   std::for_each(dependencies.begin(), dependencies.end(),
                 UnescapeFastbuildVariables);
 
-
   // TODO: Select linker compiler
   linkerNode.Compiler = ".Compiler_dummy";
   if (!objectLists.empty()) {
@@ -1121,7 +1122,7 @@ cmFastbuildNormalTargetGenerator::GenerateLink(
   linkerNode.Libraries = dependencies;
   for (const auto& objectList : objectLists)
     linkerNode.Libraries.push_back(objectList.Name);
-  
+
   return { linkerNode };
 }
 
@@ -1149,7 +1150,8 @@ void cmFastbuildNormalTargetGenerator::Generate()
   }
 
   const std::string objPath = GetGeneratorTarget()->GetSupportDirectory();
-  fastbuildTarget.Variables["TargetOutDir"] = "\"" + ConvertToFastbuildPath(objPath) + "\"";
+  fastbuildTarget.Variables["TargetOutDir"] =
+    "\"" + ConvertToFastbuildPath(objPath) + "\"";
 
   if (GeneratorTarget->GetType() == cmStateEnums::EXECUTABLE ||
       GeneratorTarget->GetType() == cmStateEnums::STATIC_LIBRARY ||
@@ -1158,8 +1160,8 @@ void cmFastbuildNormalTargetGenerator::Generate()
     std::string targetOutPDBPath =
       GeneratorTarget->GetPDBDirectory(configName) + "/" +
       GeneratorTarget->GetPDBName(configName);
-    fastbuildTarget.Variables["TargetOutPDBPath"] = "\"" +
-      ConvertToFastbuildPath(targetOutPDBPath) + "\"";
+    fastbuildTarget.Variables["TargetOutPDBPath"] =
+      "\"" + ConvertToFastbuildPath(targetOutPDBPath) + "\"";
   }
   if (GeneratorTarget->GetType() <= cmStateEnums::OBJECT_LIBRARY) {
     std::string targetOutCompilePDBPath =
@@ -1170,12 +1172,13 @@ void cmFastbuildNormalTargetGenerator::Generate()
     }
     targetOutCompilePDBPath =
       Makefile->GetHomeOutputDirectory() + "/" + targetOutCompilePDBPath;
-    fastbuildTarget.Variables["TargetOutCompilePDBPath"] = "\"" +
-      ConvertToFastbuildPath(targetOutCompilePDBPath) + "\"";
+    fastbuildTarget.Variables["TargetOutCompilePDBPath"] =
+      "\"" + ConvertToFastbuildPath(targetOutCompilePDBPath) + "\"";
   }
   fastbuildTarget.Variables["TargetOutputImplib"] = "\"" +
     ConvertToFastbuildPath(GeneratorTarget->GetFullPath(
-      configName, cmStateEnums::ImportLibraryArtifact)) + "\"";
+      configName, cmStateEnums::ImportLibraryArtifact)) +
+    "\"";
 
   fastbuildTarget.PreBuildExecNodes = GenerateCommands("PreBuild");
   fastbuildTarget.PreLinkExecNodes = GenerateCommands("PreLink");
@@ -1192,30 +1195,38 @@ void cmFastbuildNormalTargetGenerator::Generate()
   std::string targetCompileOutDirectory =
     this->GeneratorTarget->GetSupportDirectory();
   auto& VCXProject = fastbuildTarget.VCXProjects.emplace_back();
-  VCXProject.UserProps = this->GeneratorTarget->GetSafeProperty("VS_USER_PROPS");
+  VCXProject.UserProps =
+    this->GeneratorTarget->GetSafeProperty("VS_USER_PROPS");
   cmSystemTools::ReplaceString(VCXProject.UserProps, "/", "\\");
 
   VCXProject.LocalDebuggerCommand = targetNames.targetOutput;
-  VCXProject.LocalDebuggerCommandArguments = this->GeneratorTarget->GetSafeProperty("VS_DEBUGGER_COMMAND_ARGUMENTS");
+  VCXProject.LocalDebuggerCommandArguments =
+    this->GeneratorTarget->GetSafeProperty("VS_DEBUGGER_COMMAND_ARGUMENTS");
 
   VCXProject.Name = targetName + "-vcxproj";
-  VCXProject.ProjectOutput = ConvertToFastbuildPath(targetCompileOutDirectory +  "/" + targetName+ ".vcxproj");
+  VCXProject.ProjectOutput = ConvertToFastbuildPath(
+    targetCompileOutDirectory + "/" + targetName + ".vcxproj");
   VCXProject.Platform = "X64";
   VCXProject.Config = configName;
   VCXProject.Target = targetName;
   VCXProject.Folder = GeneratorTarget->GetSafeProperty("FOLDER");
 
   std::vector<cmSourceGroup> sourceGroups = this->Makefile->GetSourceGroups();
-  for (const BT<cmSourceFile*>& source : GeneratorTarget->GetSourceFiles(configName)) {
-      cmSourceGroup* sourceGroup =
-        this->Makefile->FindSourceGroup(source.Value->ResolveFullPath(), sourceGroups);
-    VCXProject.ProjectFiles[sourceGroup->GetFullName()].push_back(ConvertToFastbuildPath(source.Value->GetFullPath()));
+  for (const BT<cmSourceFile*>& source :
+       GeneratorTarget->GetSourceFiles(configName)) {
+    cmSourceGroup* sourceGroup = this->Makefile->FindSourceGroup(
+      source.Value->ResolveFullPath(), sourceGroups);
+    VCXProject.ProjectFiles[sourceGroup->GetFullName()].push_back(
+      ConvertToFastbuildPath(source.Value->GetFullPath()));
   }
-  std::string cmakeCommand =
-    this->GetLocalGenerator()->ConvertToOutputFormat(
-      cmSystemTools::GetCMakeCommand(), cmLocalGenerator::SHELL);
-  VCXProject.ProjectBuildCommand = cmStrCat(cmakeCommand, " --build ", GetGlobalGenerator()->GetLocalGenerators()[0]->GetCurrentBinaryDirectory(), " --target \"", targetName, "\" --config ", configName);
-  VCXProject.ProjectRebuildCommand = cmStrCat(VCXProject.ProjectBuildCommand, " -- -clean");
+  std::string cmakeCommand = this->GetLocalGenerator()->ConvertToOutputFormat(
+    cmSystemTools::GetCMakeCommand(), cmLocalGenerator::SHELL);
+  VCXProject.ProjectBuildCommand = cmStrCat(
+    cmakeCommand, " --build ",
+    GetGlobalGenerator()->GetLocalGenerators()[0]->GetCurrentBinaryDirectory(),
+    " --target \"", targetName, "\" --config ", configName);
+  VCXProject.ProjectRebuildCommand =
+    cmStrCat(VCXProject.ProjectBuildCommand, " -- -clean");
 #endif
 
   fastbuildTarget.IsGlobal =
