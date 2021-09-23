@@ -1097,6 +1097,7 @@ cmFastbuildNormalTargetGenerator::GenerateLink(
 
   std::string executable;
   std::string linkerOptions;
+  std::string linkerType = "auto";
   SplitExecutableAndFlags(linkCmd, executable, linkerOptions);
 
   // Now detect the extra dependencies for linking
@@ -1106,14 +1107,6 @@ cmFastbuildNormalTargetGenerator::GenerateLink(
   std::for_each(dependencies.begin(), dependencies.end(),
                 UnescapeFastbuildVariables);
 
-  // HACK: Horrible horrible hack to get around Fastbuild bugs
-  // Fastbuild doesn't search in the working directory for the libraries
-  // and the only easy way to do that is to impersonate MSVC
-  std::string linkerType = "msvc";
-  if (linkerNode.Type !=
-      cmGlobalFastbuildGenerator::FastbuildLinkerNode::STATIC_LIBRARY) {
-    linkerOptions += "-LIBPATH:.";
-  }
 
   // TODO: Select linker compiler
   linkerNode.Compiler = ".Compiler_dummy";
