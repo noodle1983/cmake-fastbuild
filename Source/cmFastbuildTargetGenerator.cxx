@@ -478,16 +478,20 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
       auto depFilePath = dep;
       if (!cmSystemTools::FileIsFullPath(depFilePath)) {
         depFilePath = cmSystemTools::CollapseFullPath(
-          cmStrCat(this->Makefile->GetCurrentSourceDirectory(), '/', dep));
+          cmStrCat(this->Makefile->GetCurrentBinaryDirectory(), '/', dep));
       }
       // If this dependency comes from a custom command, add that command to
       // the dependencies list
       auto command = std::find_if(
         commands.begin(), commands.end(),
-        [&depFilePath](cmCustomCommand const& cc) {
-          const std::vector<std::string>& outputs = cc.GetOutputs();
-          return std::find(outputs.begin(), outputs.end(), depFilePath) !=
-            outputs.end();
+        [currentCc = &cc, &depFilePath](cmCustomCommand const& cc) {
+          // Ignore self
+          if (&cc != currentCc) {
+            const std::vector<std::string>& outputs = cc.GetOutputs();
+            return std::find(outputs.begin(), outputs.end(), depFilePath) !=
+              outputs.end();
+          }
+          return false;
         });
 
       if (command != commands.end()) {
