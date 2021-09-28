@@ -225,12 +225,12 @@ void cmFastbuildNormalTargetGenerator::DetectLinkerLibPaths(
 bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
   std::string& command, const std::string& configName)
 {
-  const std::string& linkLanguage =
-    GeneratorTarget->GetLinkerLanguage(configName);
+  auto* gt = this->GetGeneratorTarget();
+  const std::string& linkLanguage = gt->GetLinkerLanguage(configName);
   if (linkLanguage.empty()) {
     cmSystemTools::Error("CMake can not determine linker language for "
                          "target: " +
-                         GeneratorTarget->GetName());
+                         gt->GetName());
     return false;
   }
 
@@ -246,15 +246,23 @@ bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
     LocalCommonGenerator->GetGlobalGenerator()->CreateLinkLineComputer(
       root, root->GetStateSnapshot().GetDirectory()));
 
-  LocalCommonGenerator->GetTargetFlags(
-    linkLineComputer.get(), configName, linkLibs, targetFlags, linkFlags,
-    frameworkPath, dummyLinkPath, GeneratorTarget);
+  LocalCommonGenerator->GetTargetFlags(linkLineComputer.get(), configName,
+                                       linkLibs, targetFlags, linkFlags,
+                                       frameworkPath, dummyLinkPath, gt);
 
+  auto const targetType = gt->GetType();
   // Add OS X version flags, if any.
-  if (this->GeneratorTarget->GetType() == cmStateEnums::SHARED_LIBRARY ||
-      this->GeneratorTarget->GetType() == cmStateEnums::MODULE_LIBRARY) {
+  if (targetType == cmStateEnums::SHARED_LIBRARY ||
+      targetType == cmStateEnums::MODULE_LIBRARY) {
     this->AppendOSXVerFlag(linkFlags, linkLanguage, "COMPATIBILITY", true);
     this->AppendOSXVerFlag(linkFlags, linkLanguage, "CURRENT", false);
+  }
+  // Add Arch flags to link flags for binaries
+  if (targetType == cmStateEnums::SHARED_LIBRARY ||
+      targetType == cmStateEnums::MODULE_LIBRARY ||
+      targetType == cmStateEnums::EXECUTABLE) {
+    root->AddArchitectureFlags(linkFlags, gt,
+                               gt->GetLinkerLanguage(configName), configName);
   }
 
   std::string linkPath;
@@ -269,7 +277,7 @@ bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
   linkPath = frameworkPath + linkPath;
 
   cmGeneratorTarget::ModuleDefinitionInfo const* mdi =
-    this->GeneratorTarget->GetModuleDefinitionInfo(configName);
+    gt->GetModuleDefinitionInfo(configName);
   if (mdi && !mdi->DefFile.empty()) {
     auto const* const defFileFlag =
       LocalCommonGenerator->GetMakefile()->GetDefinition(
@@ -284,9 +292,8 @@ bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
   linkFlags += " " + linkPath;
 
   cmRulePlaceholderExpander::RuleVariables vars;
-  vars.CMTargetName = this->GeneratorTarget->GetName().c_str();
-  vars.CMTargetType =
-    cmState::GetTargetTypeName(this->GeneratorTarget->GetType()).c_str();
+  vars.CMTargetName = gt->GetName().c_str();
+  vars.CMTargetType = cmState::GetTargetTypeName(targetType).c_str();
   vars.Language = linkLanguage.c_str();
   const std::string manifests = this->GetManifestsAsFastbuildPath();
   vars.Manifests = manifests.c_str();
@@ -312,7 +319,7 @@ bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
     std::ostringstream minorStream;
     int major;
     int minor;
-    GeneratorTarget->GetTargetVersion(major, minor);
+    gt->GetTargetVersion(major, minor);
     majorStream << major;
     minorStream << minor;
     targetVersionMajor = majorStream.str();
@@ -329,8 +336,8 @@ bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
   vars.LanguageCompileFlags = "";
   // Rule for linking library/executable.
   std::string launcher;
-  auto const* const val = LocalCommonGenerator->GetRuleLauncher(
-    this->GeneratorTarget, "RULE_LAUNCH_LINK");
+  auto const* const val =
+    LocalCommonGenerator->GetRuleLauncher(gt, "RULE_LAUNCH_LINK");
   if (val && !val->empty()) {
     launcher = *val;
     launcher += " ";
