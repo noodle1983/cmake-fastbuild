@@ -872,11 +872,25 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
   {
     FastbuildTarget allTarget;
     FastbuildAliasNode allNode;
-    for (const auto& it : FastbuildTargets) {
-      const auto& Target = it.second;
+
+    // Some pre-processing on Targets
+    for (auto& it : FastbuildTargets) {
+      auto& Target = it.second;
+      // Add non-global and non-excluded targets to "all"
       if (!Target.IsGlobal && !Target.IsExcluded) {
         allNode.Targets.insert(Target.Name + "-products");
         allTarget.Dependencies.push_back(Target.Name);
+      }
+      // Search for ExecNodes that depend on Noop and add this dependency to
+      // the target (couldn't be done earlier, this is Fastbuild specific)
+      for (auto const& execNode : Target.PostBuildExecNodes) {
+        if (execNode.IsNoop) {
+          for (auto const& dep : execNode.PreBuildDependencies) {
+            if (dep == "noop") {
+              Target.Dependencies.push_back("noop");
+            }
+          }
+        }
       }
     }
 
@@ -1043,6 +1057,7 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
     std::vector<std::string> targets;
     std::unordered_multimap<std::string, std::string> forwardDependencies,
       reverseDependencies;
+    // Create forward and reverse dependencies maps
     for (const auto& it : FastbuildTargets) {
       const auto& Target = it.second;
 
@@ -1053,6 +1068,8 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
       }
     }
 
+    // Sort targets by dependencies
+    // (ie. add to the list only if it doesn't depend on anything)
     while (!targets.empty()) {
       size_t initialSize = targets.size();
       for (auto it = targets.begin(); it != targets.end();) {

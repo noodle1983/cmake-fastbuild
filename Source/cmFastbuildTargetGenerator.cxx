@@ -501,6 +501,11 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
       }
     }
 
+    // Make sure we depend from 'noop' if we have a full noop command
+    if (execNode.IsNoop && execNode.PreBuildDependencies.empty()) {
+      execNode.PreBuildDependencies.insert("noop");
+    }
+
     nodes.push_back(execNode);
 
     if (outputs.size() > 1) {
