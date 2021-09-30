@@ -1233,6 +1233,8 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
             cmSystemTools::ReplaceString(folderId, "\\", "_");
             cmSystemTools::ReplaceString(folderId, "..", "_");
             cmSystemTools::ReplaceString(folderId, ".", "_");
+            cmSystemTools::ReplaceString(folderId, "+", "_");
+            cmSystemTools::ReplaceString(folderId, "-", "_");
 
             std::stringstream ss;
             WriteVariable(ss, "Folder", Quote(folder), 3);
@@ -1333,6 +1335,8 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
       cmSystemTools::ReplaceString(folderId, " ", "_");
       cmSystemTools::ReplaceString(folderId, "/", "_");
       cmSystemTools::ReplaceString(folderId, "\\", "_");
+      cmSystemTools::ReplaceString(folderId, "+", "_");
+      cmSystemTools::ReplaceString(folderId, "-", "_");
 
       std::stringstream ss;
       WriteVariable(ss, "Path", Quote(folder), 2);
