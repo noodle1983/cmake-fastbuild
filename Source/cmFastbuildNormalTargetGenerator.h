@@ -25,7 +25,8 @@ private:
   GenerateObjects();
   std::vector<cmGlobalFastbuildGenerator::FastbuildLinkerNode> GenerateLink(
     const std::vector<cmGlobalFastbuildGenerator::FastbuildObjectListNode>&
-      objectLists);
+      objectLists,
+    const bool useResponseFile);
 
   struct FastbuildTargetNames
   {
@@ -53,7 +54,8 @@ private:
   void DetectLinkerLibPaths(std::string& linkerLibPath,
                             const std::string& configName);
   bool DetectBaseLinkerCommand(std::string& command,
-                               const std::string& configName);
+                               const std::string& configName,
+                               const bool useResponseFile);
 
   void ComputeLinkCmds(std::vector<std::string>& linkCmds,
                        std::string configName);

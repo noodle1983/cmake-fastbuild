@@ -223,7 +223,8 @@ void cmFastbuildNormalTargetGenerator::DetectLinkerLibPaths(
 }
 
 bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
-  std::string& command, const std::string& configName)
+  std::string& command, const std::string& configName,
+  const bool useResponseFile)
 {
   auto* gt = this->GetGeneratorTarget();
   const std::string& linkLanguage = gt->GetLinkerLanguage(configName);
@@ -299,8 +300,15 @@ bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
   vars.Manifests = manifests.c_str();
 
   std::string responseFlag;
-  vars.Objects =
-    FASTBUILD_DOLLAR_TAG "FB_INPUT_1_PLACEHOLDER" FASTBUILD_DOLLAR_TAG;
+  if (useResponseFile) {
+    // Currently fbuild always requires '%1' to be present in the command line,
+    // so we specify the currently unused (empty) %1[1] variable
+    vars.Objects = "%1[1] @" FASTBUILD_DOLLAR_TAG
+                   "TargetResponseFileName" FASTBUILD_DOLLAR_TAG;
+  } else {
+    vars.Objects =
+      FASTBUILD_DOLLAR_TAG "FB_INPUT_1_PLACEHOLDER" FASTBUILD_DOLLAR_TAG;
+  }
   vars.LinkLibraries = linkLibs.c_str();
 
   vars.ObjectDir = FASTBUILD_DOLLAR_TAG "TargetOutDir" FASTBUILD_DOLLAR_TAG;
@@ -1008,7 +1016,8 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
 std::vector<cmGlobalFastbuildGenerator::FastbuildLinkerNode>
 cmFastbuildNormalTargetGenerator::GenerateLink(
   const std::vector<cmGlobalFastbuildGenerator::FastbuildObjectListNode>&
-    objectLists)
+    objectLists,
+  const bool useResponseFile)
 {
   cmGlobalFastbuildGenerator::FastbuildLinkerNode linkerNode;
 
@@ -1100,7 +1109,7 @@ cmFastbuildNormalTargetGenerator::GenerateLink(
 
   // Remove the command from the front and leave the flags behind
   std::string linkCmd;
-  if (!DetectBaseLinkerCommand(linkCmd, configName)) {
+  if (!DetectBaseLinkerCommand(linkCmd, configName, useResponseFile)) {
     return {};
   }
 
@@ -1187,12 +1196,32 @@ void cmFastbuildNormalTargetGenerator::Generate()
       configName, cmStateEnums::ImportLibraryArtifact)) +
     "\"";
 
+  auto useResponseFile = false;
+#if _WIN32
+  if (GeneratorTarget->GetType() == cmStateEnums::EXECUTABLE ||
+      GeneratorTarget->GetType() == cmStateEnums::SHARED_LIBRARY ||
+      GeneratorTarget->GetType() == cmStateEnums::MODULE_LIBRARY) {
+    // TODO: Detect if response file is required or not
+    if (false) {
+      useResponseFile = true;
+      auto const responseFile = ConvertToFastbuildPath(objPath) + "/" +
+        GeneratorTarget->GetName() + ".rsp";
+      fastbuildTarget.Variables["TargetResponseFileName"] =
+        "\"" + responseFile + "\"";
+    }
+    // TODO: Dump the content of the link inputs to the response file, either
+    // here (if possible) or in GenerateLink if no other way (in this case
+    // we'll have to pass the filename to the method)
+  }
+#endif // _WIN32
+
   fastbuildTarget.PreBuildExecNodes = GenerateCommands("PreBuild");
   fastbuildTarget.PreLinkExecNodes = GenerateCommands("PreLink");
   fastbuildTarget.PostBuildExecNodes = GenerateCommands("PostBuild");
   fastbuildTarget.ExecNodes = GenerateCommands();
   fastbuildTarget.ObjectListNodes = GenerateObjects();
-  fastbuildTarget.LinkerNodes = GenerateLink(fastbuildTarget.ObjectListNodes);
+  fastbuildTarget.LinkerNodes =
+    GenerateLink(fastbuildTarget.ObjectListNodes, useResponseFile);
 
 #ifdef _WIN32
   std::string targetName = GeneratorTarget->GetName();
