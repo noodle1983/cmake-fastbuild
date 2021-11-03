@@ -1210,7 +1210,7 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
     // Write the VSProject node on Windows
 #ifdef _WIN32
     for (const auto& VCXProject : Target.VCXProjects) {
-      if (!Target.IsGlobal &&
+      if (!Target.IsGlobal && !Target.LinkerNodes.empty() &&
           Target.LinkerNodes.front().Type == FastbuildLinkerNode::EXECUTABLE)
         SolutionBuildProjects.push_back(VCXProject.Name);
 
@@ -1228,6 +1228,7 @@ void cmGlobalFastbuildGenerator::WriteTargets(std::ostream& os)
               ProjectFiles.push_back(file);
           } else {
             std::string folderId = folder;
+            cmSystemTools::ReplaceString(folderId, ":", "_");
             cmSystemTools::ReplaceString(folderId, " ", "_");
             cmSystemTools::ReplaceString(folderId, "/", "_");
             cmSystemTools::ReplaceString(folderId, "\\", "_");
