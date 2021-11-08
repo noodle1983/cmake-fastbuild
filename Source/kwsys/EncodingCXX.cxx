@@ -20,6 +20,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
+#include <fstream>
+#include <iostream>
 
 #ifdef _MSC_VER
 #  pragma warning(disable : 4786)
@@ -61,6 +63,33 @@ Encoding::CommandLineArguments Encoding::CommandLineArguments::Main(
 Encoding::CommandLineArguments::CommandLineArguments(int ac,
                                                      char const* const* av)
 {
+  if (ac == 2 && av[1][0] == '@') {
+    unsigned argIndex = 0;
+	this->argv_.reserve(ac + 1);
+
+    this->argv_.push_back(strdup(av[argIndex]));
+    argIndex++;
+
+    std::string rspFilePath = &av[1][1];
+    if (rspFilePath.length() > 2 && (rspFilePath[0] == '"' || rspFilePath[1] == '\'')) {
+      rspFilePath = rspFilePath.substr(1, rspFilePath.size() - 2);
+    }
+    std::ifstream in(rspFilePath);
+    if (!in.is_open()) {
+      std::cerr << "failed to open response file: " << rspFilePath
+                << std::endl;
+      return;
+    }
+    std::string line;
+    while (std::getline(in, line, ' ')) {
+      if (!line.empty()) {
+        this->argv_.push_back(strdup(line.c_str()));
+        argIndex++;
+      }
+    }
+    this->argv_.push_back(nullptr);
+    return;
+  }
   this->argv_.resize(ac + 1);
   for (int i = 0; i < ac; i++) {
     this->argv_[i] = strdup(av[i]);
