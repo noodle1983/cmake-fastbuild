@@ -562,6 +562,7 @@ bool cmSystemTools::RunSingleCommand(std::vector<std::string> const& command,
   }
   argv.push_back(nullptr);
 
+  std::string rspArg;
   if (cmdLen >= cmSystemTools::CalculateCommandLineLengthLimit()) {
     std::string rspFilePath = cmStrCat(dir == nullptr ? cmSystemTools::GetCurrentWorkingDirectory() : dir,
         "/rsp_", cmdLen, ".txt");
@@ -571,10 +572,13 @@ bool cmSystemTools::RunSingleCommand(std::vector<std::string> const& command,
       for (int i = 1; i < command.size(); i++) {
         of << command[i] << std::endl;
       }
+      of.close();
+
       argv.clear();
       argv.push_back(command[0].c_str());
-      std::string rspArg = "@" + rspFilePath;
+      rspArg = "@" + rspFilePath;
       argv.push_back(rspArg.c_str());
+      argv.push_back(nullptr);
     }
   }
 

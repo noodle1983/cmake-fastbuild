@@ -22,6 +22,7 @@
 #include <vector>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 
 #ifdef _MSC_VER
 #  pragma warning(disable : 4786)
@@ -81,10 +82,15 @@ Encoding::CommandLineArguments::CommandLineArguments(int ac,
       return;
     }
     std::string line;
-    while (std::getline(in, line, ' ')) {
-      if (!line.empty()) {
-        this->argv_.push_back(strdup(line.c_str()));
-        argIndex++;
+    while (std::getline(in, line, '\n')) {
+      line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
+      std::stringstream ss(line);
+      std::string arg;
+      while (std::getline(ss, arg, ' ')) {
+        if (!arg.empty()) {
+          this->argv_.push_back(strdup(arg.c_str()));
+          argIndex++;
+        }
       }
     }
     this->argv_.push_back(nullptr);
