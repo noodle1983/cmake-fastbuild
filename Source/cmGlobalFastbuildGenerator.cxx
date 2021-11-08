@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <future>
+#include <filesystem>
 
 #ifdef _WIN32
 #  include <windows.h>
@@ -122,7 +123,7 @@ cmGlobalFastbuildGenerator::GenerateBuildCommand(
   // Push in the make options
   makeCommand.Add(makeOptions.begin(), makeOptions.end());
 
-  // makeCommand.Add("-showcmds");
+  makeCommand.Add("-showcmds");
   // makeCommand.Add("-quiet");
   makeCommand.Add("-monitor");
   makeCommand.Add("-ide");
@@ -519,6 +520,17 @@ void cmGlobalFastbuildGenerator::AddCompiler(const std::string& language,
   if (compilerLocation.empty())
     return;
 
+  // Calculate the i18n number.
+  std::string rootDir = cmSystemTools::GetFilenamePath(compilerLocation);
+  std::string i18nNum = "1033";
+  for (auto const& dir_entry : std::filesystem::directory_iterator{ rootDir }) {
+    if (dir_entry.is_directory() &&
+        std::filesystem::exists(dir_entry.path().string() + "/clui.dll")) {
+      i18nNum = dir_entry.path().filename().string();
+      break;
+    }
+  }
+
   // Add the language to the compiler's name
   FastbuildCompiler compilerDef;
   compilerDef.extraVariables.push_back(
@@ -575,9 +587,9 @@ void cmGlobalFastbuildGenerator::AddCompiler(const std::string& language,
         compilerDef.extraFiles.push_back("$Root$/vcruntime140.dll");
         compilerDef.extraFiles.push_back(
           "$Root$/vcruntime140_1.dll"); // Required as of 16.5.1 (14.25.28610)
-        compilerDef.extraFiles.push_back("$Root$/1033/clui.dll");
+        compilerDef.extraFiles.push_back("$Root$/" + i18nNum +"/clui.dll");
         compilerDef.extraFiles.push_back(
-          "$Root$/1033/mspft140ui.dll"); // Localized messages for static
+          "$Root$/" + i18nNum + "/mspft140ui.dll"); // Localized messages for static
                                          // analysis
       }
       // Visual Studio 15 (19.10 to 19.19)
@@ -596,7 +608,7 @@ void cmGlobalFastbuildGenerator::AddCompiler(const std::string& language,
         compilerDef.extraFiles.push_back("$Root$/mspft140.dll");
         compilerDef.extraFiles.push_back("$Root$/msvcp140.dll");
         compilerDef.extraFiles.push_back("$Root$/vcruntime140.dll");
-        compilerDef.extraFiles.push_back("$Root$/1033/clui.dll");
+        compilerDef.extraFiles.push_back("$Root$/" + i18nNum + "/clui.dll");
       }
     }
     // TODO: Handle Intel compiler
