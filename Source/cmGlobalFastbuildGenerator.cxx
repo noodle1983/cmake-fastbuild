@@ -813,6 +813,7 @@ std::set<std::string> cmGlobalFastbuildGenerator::WriteLinker(
                       Quote(LinkerNode.LinkerOptions), 2);
         WriteVariable(*BuildFileStream, "LinkerOutput",
                       Quote(LinkerNode.LinkerOutput), 2);
+        WriteVariable(*BuildFileStream, "LinkerAllowResponseFile", "true", 2);
         WriteArray(*BuildFileStream, "Libraries", Wrap(LinkerNode.Libraries),
                    2);
         WriteVariable(*BuildFileStream, "LinkerLinkObjects", "false", 2);
@@ -837,6 +838,7 @@ std::set<std::string> cmGlobalFastbuildGenerator::WriteLinker(
                    Wrap(LinkerNode.Libraries), 2);
         WriteVariable(*BuildFileStream, "LibrarianOutput",
                       Quote(LinkerNode.LinkerOutput), 2);
+        WriteVariable(*BuildFileStream, "LibrarianAllowResponseFile", "true", 2);
         WriteVariable(*BuildFileStream, "LibrarianType",
                       Quote(LinkerNode.LinkerType), 2);
         WriteVariable(*BuildFileStream, "Compiler", LinkerNode.Compiler, 2);

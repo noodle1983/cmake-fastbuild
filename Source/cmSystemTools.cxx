@@ -563,7 +563,9 @@ bool cmSystemTools::RunSingleCommand(std::vector<std::string> const& command,
   argv.push_back(nullptr);
 
   if (cmdLen >= cmSystemTools::CalculateCommandLineLengthLimit()) {
-    std::string rspFilePath = cmStrCat(dir, "rsp_", cmdLen, ".txt");
+    std::string rspFilePath = cmStrCat(dir == nullptr ? cmSystemTools::GetCurrentWorkingDirectory() : dir,
+        "/rsp_", cmdLen, ".txt");
+    std::cout << "use response file:" << rspFilePath << std::endl;
     std::ofstream of(rspFilePath);
     if (of.is_open()) {
       for (int i = 1; i < command.size(); i++) {
