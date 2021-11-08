@@ -160,6 +160,17 @@ void cmGlobalFastbuildGenerator::ComputeTargetObjectDirectory(
   gt->ObjectDirectory = dir;
 }
 
+void cmGlobalFastbuildGenerator::AppendDirectoryForConfig(
+  const std::string& prefix, const std::string& config,
+  const std::string& suffix, std::string& dir)
+{
+  if (!config.empty()) {
+    dir += prefix;
+    dir += config;
+    dir += suffix;
+  }
+}
+
 void cmGlobalFastbuildGenerator::GetDocumentation(cmDocumentationEntry& entry)
 {
   entry.Name = cmGlobalFastbuildGenerator::GetActualName();

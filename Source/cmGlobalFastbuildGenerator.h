@@ -64,6 +64,10 @@ public:
   bool IsMultiConfig() const override { return false; }
 
   void ComputeTargetObjectDirectory(cmGeneratorTarget*) const override;
+  void AppendDirectoryForConfig(const std::string& prefix,
+                                const std::string& config,
+                                const std::string& suffix,
+                                std::string& dir) override;
 
   static std::string GetActualName() { return "Fastbuild"; }
 
