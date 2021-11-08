@@ -2204,6 +2204,8 @@ bool cmVSLink::Parse(std::vector<std::string>::const_iterator argBeg,
       }
     } else if (cmHasLiteralPrefix(*arg, "--intdir=")) {
       intDir = arg->substr(9);
+      intDir.erase(std::remove(intDir.begin(), intDir.end(), '"'), intDir.end());
+      intDir.erase(std::remove(intDir.begin(), intDir.end(), '\''), intDir.end());
       ++arg;
     } else if (cmHasLiteralPrefix(*arg, "--rc=")) {
       this->RcPath = arg->substr(5);
