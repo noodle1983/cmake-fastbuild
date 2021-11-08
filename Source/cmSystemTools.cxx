@@ -566,12 +566,28 @@ bool cmSystemTools::RunSingleCommand(std::vector<std::string> const& command,
                                      const char* dir, OutputOption outputflag,
                                      cmDuration timeout, Encoding encoding)
 {
+  unsigned int cmdLen = 0;
   std::vector<const char*> argv;
   argv.reserve(command.size() + 1);
   for (std::string const& cmd : command) {
     argv.push_back(cmd.c_str());
+    cmdLen += cmd.length();
   }
   argv.push_back(nullptr);
+
+  if (cmdLen >= cmSystemTools::CalculateCommandLineLengthLimit()) {
+    std::string rspFilePath = cmStrCat(dir, "rsp_", cmdLen, ".txt");
+    std::ofstream of(rspFilePath);
+    if (of.is_open()) {
+      for (int i = 1; i < command.size(); i++) {
+        of << command[i] << std::endl;
+      }
+      argv.clear();
+      argv.push_back(command[0].c_str());
+      std::string rspArg = "@" + rspFilePath;
+      argv.push_back(rspArg.c_str());
+    }
+  }
 
   cmsysProcess* cp = cmsysProcess_New();
   cmsysProcess_SetCommand(cp, argv.data());
