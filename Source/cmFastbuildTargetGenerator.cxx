@@ -314,7 +314,7 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
 
     std::string launcher;
 
-    const cmProp property_value =
+    const auto property_value =
       this->Makefile->GetProperty("RULE_LAUNCH_CUSTOM");
 
     if (property_value && !property_value->empty()) {
@@ -326,8 +326,7 @@ cmFastbuildTargetGenerator::GenerateCommands(const std::string& buildStep)
       if (!outputs.empty()) {
         output = outputs[0];
         if (ccg.GetWorkingDirectory().empty()) {
-          output = this->LocalGenerator->MaybeConvertToRelativePath(
-            this->LocalGenerator->GetCurrentBinaryDirectory(), output);
+          output = this->LocalGenerator->MaybeRelativeToCurBinDir(output);
         }
         output = this->LocalGenerator->ConvertToOutputFormat(
           output, cmOutputConverter::SHELL);

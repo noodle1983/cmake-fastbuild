@@ -26,7 +26,7 @@
 
 cmLocalFastbuildGenerator::cmLocalFastbuildGenerator(cmGlobalGenerator* gg,
                                                      cmMakefile* makefile)
-  : cmLocalCommonGenerator(gg, makefile, makefile->GetCurrentBinaryDirectory())
+  : cmLocalCommonGenerator(gg, makefile, WorkDir::TopBin)
 {
 }
 

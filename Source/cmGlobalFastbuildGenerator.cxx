@@ -68,7 +68,7 @@ bool cmGlobalFastbuildGenerator::FindMakeProgram(cmMakefile* mf)
   if (!cmGlobalGenerator::FindMakeProgram(mf)) {
     return false;
   }
-  if (auto const* const fastbuildCommand =
+  if (auto fastbuildCommand =
         mf->GetDefinition("CMAKE_MAKE_PROGRAM")) {
     this->FastbuildCommand = *fastbuildCommand;
     std::vector<std::string> command;
@@ -664,8 +664,7 @@ std::string cmGlobalFastbuildGenerator::ConvertToFastbuildPath(
   const std::string& path) const
 {
   auto root = LocalGenerators[0].get();
-  return root->MaybeConvertToRelativePath(
-    ((cmLocalCommonGenerator*)root)->GetWorkingDirectory(), path);
+  return root->MaybeRelativeToCurBinDir(path);
 }
 
 std::set<std::string> cmGlobalFastbuildGenerator::WriteExecs(

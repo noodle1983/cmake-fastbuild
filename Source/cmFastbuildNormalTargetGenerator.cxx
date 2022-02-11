@@ -82,10 +82,11 @@ void cmFastbuildNormalTargetGenerator::DetectCompilerFlags(
 
   // Add include directory flags.
   std::string includeFlags = LocalCommonGenerator->GetIncludeFlags(
-    includes, this->GeneratorTarget, language,
-    language == "RC" ? true : false, // full include paths for RC
-    // needed by cmcldeps
-    false, configName);
+    includes, this->GeneratorTarget, language, configName,
+    false,
+    // full include paths for RC needed by cmcldeps
+    language == "RC" ? cmLocalGenerator::IncludePathStyle::Absolute
+                     : cmLocalGenerator::IncludePathStyle::Default);
 
   LocalCommonGenerator->AppendFlags(compileFlags, includeFlags);
 
@@ -279,7 +280,7 @@ bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
   cmGeneratorTarget::ModuleDefinitionInfo const* mdi =
     gt->GetModuleDefinitionInfo(configName);
   if (mdi && !mdi->DefFile.empty()) {
-    auto const* const defFileFlag =
+    auto defFileFlag =
       LocalCommonGenerator->GetMakefile()->GetDefinition(
         "CMAKE_LINK_DEF_FILE_FLAG");
     if (defFileFlag) {
@@ -336,7 +337,7 @@ bool cmFastbuildNormalTargetGenerator::DetectBaseLinkerCommand(
   vars.LanguageCompileFlags = "";
   // Rule for linking library/executable.
   std::string launcher;
-  auto const* const val =
+  auto val =
     LocalCommonGenerator->GetRuleLauncher(gt, "RULE_LAUNCH_LINK");
   if (val && !val->empty()) {
     launcher = *val;
@@ -370,7 +371,7 @@ void cmFastbuildNormalTargetGenerator::ComputeLinkCmds(
   {
     std::string linkCmdVar =
       GeneratorTarget->GetCreateRuleVariable(linkLanguage, configName);
-    auto const* const linkCmd = Makefile->GetDefinition(linkCmdVar);
+    auto linkCmd = Makefile->GetDefinition(linkCmdVar);
     if (linkCmd) {
       std::string linkCmdStr = *linkCmd;
       if (this->GetGeneratorTarget()->HasImplibGNUtoMS(configName)) {
@@ -378,7 +379,7 @@ void cmFastbuildNormalTargetGenerator::ComputeLinkCmds(
         ruleVar +=
           this->GeneratorTarget->GetLinkerLanguage(this->GetConfigName());
         ruleVar += "_GNUtoMS_RULE";
-        if (auto const* const rule = this->Makefile->GetDefinition(ruleVar)) {
+        if (auto rule = this->Makefile->GetDefinition(ruleVar)) {
           linkCmdStr += *rule;
         }
       }
@@ -938,7 +939,7 @@ cmFastbuildNormalTargetGenerator::GenerateObjects()
         } else {
           std::string outputExtensionVar = std::string("CMAKE_") + language +
             std::string("_OUTPUT_EXTENSION");
-          auto const* const outputExtension =
+          auto outputExtension =
             Makefile->GetDefinition(outputExtensionVar);
 
           objectListNode.CompilerOutputExtension = *outputExtension;
